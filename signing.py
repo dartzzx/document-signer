@@ -1,42 +1,53 @@
-import base64
-import requests
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import Response
 
-AUTOGRAM_URL = "http://localhost:37200/sign"
+from services.autogram import sign_pdf_with_autogram
+from services.visual import add_visual_signature
 
-INPUT_FILE = "input.pdf"
-OUTPUT_FILE = "signed.pdf"
+app = FastAPI()
 
-# Načítanie PDF
-with open(INPUT_FILE, "rb") as f:
-    pdf_base64 = base64.b64encode(f.read()).decode("utf-8")
+@app.get("/")
+def root():
+    return {"message": "Backend beží"}
 
-payload = {
-    "document": {
-        "content": pdf_base64,
-        "filename": INPUT_FILE
-    },
-    "parameters": {
-        "level": "PAdES_BASELINE_B"
-    },
-    "payloadMimeType": "application/pdf;base64"
-}
 
-response = requests.post(AUTOGRAM_URL, json=payload)
+@app.post("/prepare-visual")
+async def prepare_visual(
+    file: UploadFile = File(...),
+    page: int = Form(...),         # 0-based
+    x: float = Form(...),
+    y: float = Form(...),
+    w: float = Form(...),
+    h: float = Form(...),
+    text: str = Form(""),          # voliteľné
+):
+    pdf_bytes = await file.read()
+    prepared = add_visual_signature(
+        pdf_bytes=pdf_bytes,
+        page_index=page,
+        x=x, y=y, w=w, h=h,
+        text=text if text else None,
+        image_bytes=None,          # neskôr pridáš upload obrázka
+    )
+    return Response(
+        content=prepared,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="prepared_{file.filename}"'}
+    )
 
-if response.status_code == 200:
-    data = response.json()
-    signed_pdf = base64.b64decode(data["content"])
 
-    with open(OUTPUT_FILE, "wb") as f:
-        f.write(signed_pdf)
+@app.post("/sign")
+async def sign_document(file: UploadFile = File(...)):
+    pdf_bytes = await file.read()
+    status, result = sign_pdf_with_autogram(pdf_bytes, file.filename)
 
-    print("✅ Dokument podpísaný")
-    print("Podpis:", data.get("signedBy"))
+    if status == "signed":
+        return Response(
+            content=result["content"],
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="signed_{file.filename}"'}
+        )
+    if status == "cancelled":
+        return {"signed": False, "message": "Podpis zrušený"}
 
-elif response.status_code == 204:
-    print("❗ Podpis bol zrušený používateľom")
-
-else:
-    print("❌ Chyba:")
-    print(response.status_code)
-    print(response.text)
+    return {"error": result.get("message"), "status_code": result.get("status_code")}
