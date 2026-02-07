@@ -1,45 +1,58 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export default function App() {
-  const [file, setFile] = useState(null);
+  const canvasRef = useRef(null);
+  const [fileName, setFileName] = useState("");
 
-  async function send() {
-    if (!file) return alert("Vyber PDF");
+  async function previewPDF(f) {
+    const data = await f.arrayBuffer();
 
-    const form = new FormData();
-    form.append("file", file);
-    form.append("page", 0);
-    form.append("x", 50);
-    form.append("y", 50);
-    form.append("w", 200);
-    form.append("h", 80);
-    form.append("text", "Test podpis");
+    const loadingTask = pdfjsLib.getDocument({ data });
+    const pdf = await loadingTask.promise;
 
-    const res = await fetch("http://127.0.0.1:8000/prepare-visual", {
-      method: "POST",
-      body: form,
-    });
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1.5 });
 
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    window.open(url);
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+
+    // vyčisti canvas
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
   }
 
   return (
     <div style={{ padding: 20 }}>
-      <h2>PDF Visual Signing Test</h2>
+      <h2>PDF preview</h2>
 
       <input
         type="file"
         accept="application/pdf"
-        onChange={(e) => setFile(e.target.files[0])}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          setFileName(f.name);
+          previewPDF(f).catch((err) => {
+            console.error(err);
+            alert("PDF sa nepodarilo zobraziť. Pozri konzolu (F12).");
+          });
+        }}
       />
 
-      <br /><br />
+      {fileName && <div style={{ marginTop: 8 }}>{fileName}</div>}
 
-      <button onClick={send}>
-        Pridať vizuálny podpis
-      </button>
+      <div style={{ marginTop: 12 }}>
+        <canvas ref={canvasRef} style={{ border: "1px solid #ccc" }} />
+      </div>
     </div>
   );
 }
