@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
+import { Rnd } from "react-rnd"
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -181,19 +182,28 @@ export default function App() {
 
         {/* overlay obdĺžnik */}
         {rect && (
-          <div
-            style={{
-              position: "absolute",
-              left: rect.x,
-              top: rect.y,
-              width: rect.w,
-              height: rect.h,
-              border: "2px dashed red",
-              background: "rgba(255,0,0,0.12)",
-              pointerEvents: "none",
-            }}
-          />
+            <Rnd
+                bounds="parent"
+                size={{ width: rect.w, height: rect.h }}
+                position={{ x: rect.x, y: rect.y }}
+                onDragStop={(e, d) => {
+                    setRect((r) => ({ ...r, x: d.x, y: d.y }));
+                }}
+                onResizeStop={(e, direction, ref, delta, position) => {
+                    setRect({
+                        x: position.x,
+                        y: position.y,
+                        w: ref.offsetWidth,
+                           h: ref.offsetHeight,
+                    });
+                }}
+                style={{
+                    border: "2px dashed red",
+                    background: "rgba(255,0,0,0.12)",
+                }}
+            />
         )}
+
       </div>
 
       {rect && (
