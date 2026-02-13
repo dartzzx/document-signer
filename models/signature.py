@@ -1,10 +1,23 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from fastapi import Form
 
 
 class VisualSignatureParams(BaseModel):
-    page: int = Field(..., ge=0)
-    x: float = Field(..., ge=0)
-    y: float = Field(..., ge=0)
-    w: float = Field(..., gt=0)
-    h: float = Field(..., gt=0)
-    text: str = Field(..., min_length=1)
+    page: int
+    x: float
+    y: float
+    w: float
+    h: float
+    text: str
+
+    @classmethod
+    def as_form(
+        cls,
+        page: int = Form(...),
+        x: float = Form(...),
+        y: float = Form(...),
+        w: float = Form(...),
+        h: float = Form(...),
+        text: str = Form(...),
+    ):
+        return cls(page=page, x=x, y=y, w=w, h=h, text=text)

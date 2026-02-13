@@ -16,7 +16,7 @@ def root():
 @app.post("/prepare-visual")
 async def prepare_visual(
     file: UploadFile = File(...),
-    params: VisualSignatureParams = Depends()
+    params: VisualSignatureParams = Depends(VisualSignatureParams.as_form)
 ):
     pdf_bytes = await file.read()
     prepared = add_visual_signature(
