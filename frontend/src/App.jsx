@@ -18,8 +18,11 @@ export default function App() {
   // rectangle v UI pixeloch (origin hore-vľavo)
   const [rect, setRect] = useState(null);
 
+  const [sigText, setSigText] = useState("Meno Priezvisko");
+
   const [preparedUrl, setPreparedUrl] = useState(null);
   const [isRendering, setIsRendering] = useState(false);
+
 
   async function loadPdf(f) {
     const data = await f.arrayBuffer();
@@ -99,7 +102,7 @@ export default function App() {
     form.append("y", String(yPdf));
     form.append("w", String(wPdf));
     form.append("h", String(hPdf));
-    form.append("text", "Test podpis");
+    form.append("text", sigText);
 
     const res = await fetch("http://127.0.0.1:8000/prepare-visual", {
       method: "POST",
@@ -163,6 +166,13 @@ export default function App() {
         <button disabled={!pdfDoc || !rect} onClick={prepareVisual} style={{ marginLeft: 12 }}>
           Pridať vizuálny podpis
         </button>
+        <input
+          value={sigText}
+          onChange={(e) => setSigText(e.target.value)}
+          placeholder="Text podpisu"
+          style={{ marginLeft: 12, width: 200 }}
+        />
+
       </div>
 
       <div
@@ -182,27 +192,35 @@ export default function App() {
 
         {/* overlay obdĺžnik */}
         {rect && (
-            <Rnd
-                bounds="parent"
-                size={{ width: rect.w, height: rect.h }}
-                position={{ x: rect.x, y: rect.y }}
-                onDragStop={(e, d) => {
-                    setRect((r) => ({ ...r, x: d.x, y: d.y }));
-                }}
-                onResizeStop={(e, direction, ref, delta, position) => {
-                    setRect({
-                        x: position.x,
-                        y: position.y,
-                        w: ref.offsetWidth,
-                           h: ref.offsetHeight,
-                    });
-                }}
-                style={{
-                    border: "2px dashed red",
-                    background: "rgba(255,0,0,0.12)",
-                }}
-            />
+          <Rnd
+            bounds="parent"
+            size={{ width: rect.w, height: rect.h }}
+            position={{ x: rect.x, y: rect.y }}
+            onDragStop={(e, d) => {
+              setRect((r) => ({ ...r, x: d.x, y: d.y }));
+            }}
+            onResizeStop={(e, direction, ref, delta, position) => {
+              setRect({
+                x: position.x,
+                y: position.y,
+                w: ref.offsetWidth,
+                h: ref.offsetHeight,
+              });
+            }}
+            style={{
+              border: "2px dashed red",
+              background: "rgba(255,0,0,0.12)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              fontWeight: "bold",
+            }}
+          >
+            {sigText}
+          </Rnd>
         )}
+
 
       </div>
 

@@ -1,8 +1,10 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Depends
 from fastapi.responses import Response
 
 from services.autogram import sign_pdf_with_autogram
 from services.visual import add_visual_signature
+
+from models.signature import VisualSignatureParams
 
 app = FastAPI()
 
@@ -14,19 +16,17 @@ def root():
 @app.post("/prepare-visual")
 async def prepare_visual(
     file: UploadFile = File(...),
-    page: int = Form(...),         # 0-based
-    x: float = Form(...),
-    y: float = Form(...),
-    w: float = Form(...),
-    h: float = Form(...),
-    text: str = Form(""),          # voliteľné
+    params: VisualSignatureParams = Depends()
 ):
     pdf_bytes = await file.read()
     prepared = add_visual_signature(
         pdf_bytes=pdf_bytes,
-        page_index=page,
-        x=x, y=y, w=w, h=h,
-        text=text if text else None,
+        page_index=params.page,
+        x=params.x,
+        y=params.y,
+        w=params.w,
+        h=params.h,
+        text=params.text,
         image_bytes=None,          # neskôr pridáš upload obrázka
     )
     return Response(
