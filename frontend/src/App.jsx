@@ -23,6 +23,9 @@ export default function App() {
   const [preparedUrl, setPreparedUrl] = useState(null);
   const [isRendering, setIsRendering] = useState(false);
 
+  // obrazok/sken podpisu
+  const [sigImage, setSigImage] = useState(null);
+
 
   async function loadPdf(f) {
     const data = await f.arrayBuffer();
@@ -104,6 +107,8 @@ export default function App() {
     form.append("h", String(hPdf));
     form.append("text", sigText);
 
+    if (sigImage) form.append("image", sigImage);
+
     const res = await fetch("http://127.0.0.1:8000/prepare-visual", {
       method: "POST",
       body: form,
@@ -171,6 +176,12 @@ export default function App() {
           onChange={(e) => setSigText(e.target.value)}
           placeholder="Text podpisu"
           style={{ marginLeft: 12, width: 200 }}
+        />
+
+        <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setSigImage(e.target.files?.[0] ?? null)}
         />
 
       </div>

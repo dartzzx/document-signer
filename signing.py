@@ -1,5 +1,8 @@
-from fastapi import FastAPI, UploadFile, File, Form, Depends
+from fastapi import FastAPI, UploadFile, File, Depends
 from fastapi.responses import Response
+from fastapi.middleware.cors import CORSMiddleware
+
+from typing import Optional
 
 from services.autogram import sign_pdf_with_autogram
 from services.visual import add_visual_signature
@@ -7,6 +10,14 @@ from services.visual import add_visual_signature
 from models.signature import VisualSignatureParams
 
 app = FastAPI()
+
+# prepojenie medzi f-endom a b-endom
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def root():
@@ -16,9 +27,11 @@ def root():
 @app.post("/prepare-visual")
 async def prepare_visual(
     file: UploadFile = File(...),
+    image: Optional[UploadFile] = File(None), # volitelny parameter pre obrazok/sken podpisu
     params: VisualSignatureParams = Depends(VisualSignatureParams.as_form)
 ):
     pdf_bytes = await file.read()
+    image_bytes = await image.read() if image else None
     prepared = add_visual_signature(
         pdf_bytes=pdf_bytes,
         page_index=params.page,
@@ -27,7 +40,7 @@ async def prepare_visual(
         w=params.w,
         h=params.h,
         text=params.text,
-        image_bytes=None,          # neskôr pridáš upload obrázka
+        image_bytes=image_bytes,
     )
     return Response(
         content=prepared,
