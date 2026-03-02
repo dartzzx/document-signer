@@ -3,6 +3,8 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
 import { Rnd } from "react-rnd"
 
+import SignatureCanvas from "./SignatureCanvas";
+
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export default function App() {
@@ -109,7 +111,7 @@ export default function App() {
     form.append("h", String(hPdf));
 
     form.append("text", sigType === "text" ? sigText : "");
-    if (sigType === "image" && sigImage) form.append("image", sigImage);
+    if ((sigType === "image" || sigType === "sketch") && sigImage) form.append("image", sigImage);
 
     const res = await fetch("http://127.0.0.1:8000/prepare-visual", {
       method: "POST",
@@ -176,6 +178,8 @@ export default function App() {
         <select value={sigType} onChange={(e) => setSigType(e.target.value)}>
             <option value="text">Text</option>
             <option value="image">Obrázok</option>
+            <option value="sketch">Kresba</option>
+
         </select>
         {sigType === "text" && (
             <input
@@ -191,6 +195,9 @@ export default function App() {
                 accept="image/*"
                 onChange={(e) => setSigImage(e.target.files?.[0] ?? null)}
             />
+        )}
+        {sigType === "sketch" && (
+            <SignatureCanvas onSave={(blob) => setSigImage(blob)} />
         )}
       </div>
 
