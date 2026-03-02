@@ -26,6 +26,8 @@ export default function App() {
   // obrazok/sken podpisu
   const [sigImage, setSigImage] = useState(null);
 
+  const [sigType, setSigType] = useState("text"); // "text" | "image"
+
 
   async function loadPdf(f) {
     const data = await f.arrayBuffer();
@@ -105,9 +107,9 @@ export default function App() {
     form.append("y", String(yPdf));
     form.append("w", String(wPdf));
     form.append("h", String(hPdf));
-    form.append("text", sigText);
 
-    if (sigImage) form.append("image", sigImage);
+    form.append("text", sigType === "text" ? sigText : "");
+    if (sigType === "image" && sigImage) form.append("image", sigImage);
 
     const res = await fetch("http://127.0.0.1:8000/prepare-visual", {
       method: "POST",
@@ -171,19 +173,25 @@ export default function App() {
         <button disabled={!pdfDoc || !rect} onClick={prepareVisual} style={{ marginLeft: 12 }}>
           Pridať vizuálny podpis
         </button>
-        <input
-          value={sigText}
-          onChange={(e) => setSigText(e.target.value)}
-          placeholder="Text podpisu"
-          style={{ marginLeft: 12, width: 200 }}
-        />
-
-        <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setSigImage(e.target.files?.[0] ?? null)}
-        />
-
+        <select value={sigType} onChange={(e) => setSigType(e.target.value)}>
+            <option value="text">Text</option>
+            <option value="image">Obrázok</option>
+        </select>
+        {sigType === "text" && (
+            <input
+                value={sigText}
+                onChange={(e) => setSigText(e.target.value)}
+                placeholder="Text podpisu"
+                style={{ width: 200 }}
+            />
+        )}
+        {sigType === "image" && (
+            <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setSigImage(e.target.files?.[0] ?? null)}
+            />
+        )}
       </div>
 
       <div
