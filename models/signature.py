@@ -19,6 +19,6 @@ class VisualSignatureParams(BaseModel):
         y: float = Form(...),
         w: float = Form(...),
         h: float = Form(...),
-        text: Optional[str] = None,
+        text: Optional[str] = Form(None),
     ):
         return cls(page=page, x=x, y=y, w=w, h=h, text=text)

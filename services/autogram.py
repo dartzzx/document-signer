@@ -3,7 +3,8 @@ import requests
 
 AUTOGRAM_URL = "http://localhost:37200/sign"
 
-def sign_pdf_with_autogram(pdf_bytes: bytes, filename: str) -> tuple[str, dict]:
+# vrati tuple
+def sign_pdf_with_autogram(pdf_bytes: bytes, filename: str):
     """
     Returns:
       ("signed", {"signedBy": ..., "issuedBy": ..., "content": <bytes>})  on success

@@ -1,9 +1,17 @@
 from io import BytesIO
 from typing import Optional
+import os;
 
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
+
+# font DeJavu
+from reportlab.pdfbase import pdfmetrics;
+from reportlab.pdfbase.ttfonts import TTFont;
+
+FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "fonts", "DejaVuSans.ttf")
+pdfmetrics.registerFont(TTFont("DejaVu", FONT_PATH))
 
 
 def add_visual_signature(
@@ -56,7 +64,7 @@ def add_visual_signature(
         )
 
     if text:
-        c.setFont("Helvetica", 9)
+        c.setFont("DejaVu", 9)
         c.drawString(x + padding, y + h - 14, text)
 
     c.save()
