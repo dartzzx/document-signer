@@ -237,6 +237,14 @@ async function signDocument() {
         <button disabled={!pdfDoc || !rect} onClick={prepareVisual} style={{ marginLeft: 12 }}>
           Pridať vizuálny podpis
         </button>
+
+        <button
+            disabled={!currentPdfBlob || isSigning}
+            onClick={signDocument}
+        >
+            {isSigning ? "Podpisujem..." : "Podpísať dokument"}
+        </button>
+
         <select value={sigType} onChange={(e) => setSigType(e.target.value)}>
             <option value="text">Text</option>
             <option value="image">Obrázok</option>
@@ -324,6 +332,13 @@ async function signDocument() {
             Stiahnuť prepared.pdf
           </a>
         </div>
+      )}
+      {signedPdfUrl && (
+          <div style={{ marginTop: 12}}>
+              <a href={signedPdfUrl} download="signed.pdf" style={{ color: "8fd3ff" }}>
+                  Stiahnúť signed.pdf
+              </a>
+          </div>
       )}
     </div>
   );
