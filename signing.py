@@ -52,7 +52,14 @@ async def prepare_visual(
 @app.post("/sign")
 async def sign_document(file: UploadFile = File(...)):
     pdf_bytes = await file.read()
-    status, result = sign_pdf_with_autogram(pdf_bytes, file.filename)
+
+    if not pdf_bytes.startswith(b"%PDF"):
+        return {"error": "Súbor nie je PDF"}
+
+    try:
+        status, result = sign_pdf_with_autogram(pdf_bytes, file.filename)
+    except Exception as e:
+        return{"error": str(e)}
 
     if status == "signed":
         return Response(
