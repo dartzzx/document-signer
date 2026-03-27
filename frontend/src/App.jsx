@@ -132,12 +132,65 @@ export default function App() {
 
     const preparedBlob = await res.blob();
 
-setCurrentPdfBlob(preparedBlob);
-setCurrentPdfName(`prepared_${currentPdfName}`);
+    setCurrentPdfBlob(preparedBlob);
+    setCurrentPdfName(`prepared_${currentPdfName}`);
 
-// reload PDF v preview
-await loadPdf(preparedBlob);
+    // reload PDF v preview
+    await loadPdf(preparedBlob);
   }
+
+async function signDocument() {
+  if (!currentPdfBlob) {
+    alert("Nie je čo podpísať.");
+    return;
+  }
+
+  setIsSigning(true);
+
+  try {
+    const fileToSign = new File([currentPdfBlob], currentPdfName, {
+      type: "application/pdf",
+    });
+
+    const form = new FormData();
+    form.append("file", fileToSign);
+
+    const res = await fetch("http://127.0.0.1:8000/sign", {
+      method: "POST",
+      body: form,
+    });
+
+    const contentType = res.headers.get("content-type") || "";
+
+    if (!res.ok) {
+      const text = await res.text();
+      alert("Chyba pri podpisovaní: " + text);
+      return;
+    }
+
+    if (contentType.includes("application/pdf")) {
+      const signedBlob = await res.blob();
+      const url = URL.createObjectURL(signedBlob);
+
+      setSignedPdfUrl(url);
+
+      // nastav podpísaný dokument ako aktuálny
+      setCurrentPdfBlob(signedBlob);
+      setCurrentPdfName(`signed_${currentPdfName}`);
+
+      await loadPdf(signedBlob);
+      return;
+    }
+
+    const data = await res.json();
+    alert(data.message || "Podpisovanie zlyhalo.");
+  } catch (err) {
+    console.error(err);
+    alert("Nepodarilo sa spojiť s backendom.");
+  } finally {
+    setIsSigning(false);
+  }
+}
 
   return (
     <div style={{ padding: 20, color: "white" }}>
