@@ -12,6 +12,12 @@ export default function App() {
   const wrapRef = useRef(null);
 
   const [file, setFile] = useState(null);
+
+  const [currentPdfBlob, setCurrentPdfBlob] = useState(null);
+    const [currentPdfName, setCurrentPdfName] = useState("document.pdf");
+    const [signedPdfUrl, setSignedPdfUrl] = useState(null);
+    const [isSigning, setIsSigning] = useState(false);
+
   const [pdfDoc, setPdfDoc] = useState(null);
 
   const [pageNum, setPageNum] = useState(1); // pdf.js 1-based
@@ -143,6 +149,8 @@ export default function App() {
           const f = e.target.files?.[0];
           if (!f) return;
           setFile(f);
+          setCurrentPdfBlob(f);
+            setCurrentPdfName(f.name);
           loadPdf(f).catch((err) => {
             console.error(err);
             alert("Nepodarilo sa načítať PDF (pozri konzolu).");
