@@ -130,12 +130,13 @@ export default function App() {
       return;
     }
 
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    setPreparedUrl(url);
+    const preparedBlob = await res.blob();
 
-    // otvor výsledok v novej karte
-    window.open(url, "_blank");
+setCurrentPdfBlob(preparedBlob);
+setCurrentPdfName(`prepared_${currentPdfName}`);
+
+// reload PDF v preview
+await loadPdf(preparedBlob);
   }
 
   return (
