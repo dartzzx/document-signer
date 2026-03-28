@@ -163,8 +163,13 @@ async function signDocument() {
     const contentType = res.headers.get("content-type") || "";
 
     if (!res.ok) {
-      const text = await res.text();
-      alert("Chyba pri podpisovaní: " + text);
+      try {
+          const err = await res.json();
+          alert("Chyba pri podpisovaní: " + (err.detail || "Neznáma chyba"));
+      } catch {
+          const text = await res.text();
+          alert("Chyba pri podpisovaní: " + text);
+      }
       return;
     }
 

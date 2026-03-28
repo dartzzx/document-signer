@@ -20,7 +20,13 @@ def sign_pdf_with_autogram(pdf_bytes: bytes, filename: str):
         "payloadMimeType": "application/pdf;base64"
     }
 
-    r = requests.post(AUTOGRAM_URL, json=payload)
+    try:
+        r = requests.post(AUTOGRAM_URL, json=payload, timeout=60)
+    except requests.RequestException:
+        return "error", {
+            "status_code": 503,
+            "message": "Podpisovacia aplikácia Autogram nie je dostupná."
+        }
 
     if r.status_code == 200:
         data = r.json()

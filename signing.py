@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Depends
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -54,12 +54,12 @@ async def sign_document(file: UploadFile = File(...)):
     pdf_bytes = await file.read()
 
     if not pdf_bytes.startswith(b"%PDF"):
-        return {"error": "Súbor nie je PDF"}
+        raise HTTPException(status_code=400, detail="Súbor nie je PDF")
 
     try:
         status, result = sign_pdf_with_autogram(pdf_bytes, file.filename)
     except Exception as e:
-        return{"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
     if status == "signed":
         return Response(
@@ -67,7 +67,11 @@ async def sign_document(file: UploadFile = File(...)):
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="signed_{file.filename}"'}
         )
+
     if status == "cancelled":
         return {"signed": False, "message": "Podpis zrušený"}
 
-    return {"error": result.get("message"), "status_code": result.get("status_code")}
+    raise HTTPException(
+        status_code = result.get("status_code", 503),
+        detail = result.get("message", "Chyba pri podpisovaní")
+    )
