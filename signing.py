@@ -31,6 +31,17 @@ async def prepare_visual(
     params: VisualSignatureParams = Depends(VisualSignatureParams.as_form)
 ):
     pdf_bytes = await file.read()
+
+    MAX_FILE_SIZE = 10 * 1024 * 1024
+
+    if len(pdf_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="Súbor je príliš veľký (max 10 MB).")
+
+    ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg"}
+
+    if image and image.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Nepodporovaný formát obrázka. Povolené sú PNG a JPEG")
+
     image_bytes = await image.read() if image else None
     prepared = add_visual_signature(
         pdf_bytes=pdf_bytes,
@@ -52,6 +63,11 @@ async def prepare_visual(
 @app.post("/sign")
 async def sign_document(file: UploadFile = File(...)):
     pdf_bytes = await file.read()
+
+    MAX_FILE_SIZE = 10 * 1024 * 1024
+
+    if len(pdf_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="Súbor je príliš veľký (max 10 MB).")
 
     if not pdf_bytes.startswith(b"%PDF"):
         raise HTTPException(status_code=400, detail="Súbor nie je PDF")

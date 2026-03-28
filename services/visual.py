@@ -10,6 +10,8 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics;
 from reportlab.pdfbase.ttfonts import TTFont;
 
+from fastapi import HTTPException
+
 FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "fonts", "DejaVuSans.ttf")
 pdfmetrics.registerFont(TTFont("DejaVu", FONT_PATH))
 
@@ -27,7 +29,7 @@ def add_visual_signature(
     reader = PdfReader(BytesIO(pdf_bytes), strict=False)
 
     if page_index < 0 or page_index >= len(reader.pages):
-        raise ValueError("Neplatné číslo strany")
+        raise HTTPException(status_code=400, detail="Neplatné číslo strany")
 
     # 1) Najprv prenes celé PDF do writer-a (bez úprav)
     writer = PdfWriter()
