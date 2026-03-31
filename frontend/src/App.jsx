@@ -185,6 +185,7 @@ async function signDocument() {
 
     const form = new FormData();
     form.append("file", fileToSign);
+    form.append("level", padesLevel);
 
     const res = await fetch("http://127.0.0.1:8000/sign", {
       method: "POST",
@@ -318,6 +319,16 @@ async function signDocument() {
         {sigType === "sketch" && (
             <SignatureCanvas onSave={(blob) => setSigImage(blob)} />
         )}
+        <div style={{ marginLeft: 12 }}>
+           Profil PAdES:{" "}
+  <select
+    value={padesLevel}
+    onChange={(e) => setPadesLevel(e.target.value)}
+  >
+    <option value="PAdES_BASELINE_B">PAdES-B</option>
+    <option value="PAdES_BASELINE_T">PAdES-T</option>
+  </select>
+</div>
       </div>
 
       <div

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
+from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Form
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -62,7 +62,7 @@ async def prepare_visual(
 
 
 @app.post("/sign")
-async def sign_document(file: UploadFile = File(...)):
+async def sign_document(file: UploadFile = File(...), level: str = Form("PAdES_BASELINE_B")):
     pdf_bytes = await file.read()
 
     MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -74,7 +74,7 @@ async def sign_document(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Súbor nie je PDF")
 
     try:
-        status, result = sign_pdf_with_autogram(pdf_bytes, file.filename)
+        status, result = sign_pdf_with_autogram(pdf_bytes, file.filename, level)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
