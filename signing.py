@@ -17,6 +17,7 @@ app.add_middleware(
     allow_origins=["http://localhost:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Signed-By", "X-Issued-By"],
 )
 
 @app.get("/")
@@ -81,7 +82,11 @@ async def sign_document(file: UploadFile = File(...)):
         return Response(
             content=result["content"],
             media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="signed_{file.filename}"'}
+            headers={
+                "Content-Disposition": f'attachment; filename="signed_{file.filename}"',
+                "X-Signed-By": result.get("signedBy", ""),
+                "X-Issued-By": result.get("issuedBy", "")
+            }
         )
 
     if status == "cancelled":

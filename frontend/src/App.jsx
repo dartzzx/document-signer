@@ -7,6 +7,34 @@ import SignatureCanvas from "./SignatureCanvas";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
+function parseSignedBy(dn) {
+    if(!dn) return "Neznáme";
+
+    const parts = dn.split(",");
+    const obj = {};
+
+    parts.forEach(p => {
+        const [key, value] = p.split("=");
+        if(key && value) obj[key.trim()] = value.trim();
+    });
+
+    return `${obj.GIVENNAME || ""} ${obj.SURNAME || ""}`.trim() || obj.CN || dn;
+}
+
+function parseIssuer(dn) {
+  if (!dn) return "Neznáme";
+
+  const parts = dn.split(",");
+  const obj = {};
+
+  parts.forEach(p => {
+    const [key, value] = p.split("=");
+    if (key && value) obj[key.trim()] = value.trim();
+  });
+
+  return obj.O || obj.CN || dn;
+}
+
 export default function App() {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
@@ -27,6 +55,9 @@ export default function App() {
   const [rect, setRect] = useState(null);
 
   const [sigText, setSigText] = useState("Meno Priezvisko");
+
+  const [signatureInfo, setSignatureInfo] = useState(null);
+  const [padesLevel, setPadesLevel] = useState("PAdES_BASELINE_B");
 
   const [preparedUrl, setPreparedUrl] = useState(null);
   const [isRendering, setIsRendering] = useState(false);
@@ -161,6 +192,8 @@ async function signDocument() {
     });
 
     const contentType = res.headers.get("content-type") || "";
+    const signedBy = res.headers.get("X-Signed-By");
+    const issuedBy = res.headers.get("X-Issued-By");
 
     if (!res.ok) {
       try {
@@ -178,6 +211,17 @@ async function signDocument() {
       const url = URL.createObjectURL(signedBlob);
 
       setSignedPdfUrl(url);
+
+      const now = new Date().toLocaleString();
+      const profileLabel = padesLevel === "PAdES_BASELINE_T" ? "PAdES-T" : "PAdES-B";
+
+      setSignatureInfo({
+        signedBy,
+        issuedBy,
+        signedAt: now,
+        type: "Kvalifikovaný elektronický podpis (QES)",
+        profile: profileLabel
+      })
 
       // nastav podpísaný dokument ako aktuálny
       setCurrentPdfBlob(signedBlob);
@@ -344,6 +388,20 @@ async function signDocument() {
                   Stiahnúť signed.pdf
               </a>
           </div>
+      )}
+      {signatureInfo && (
+        <div style={{ marginTop: 12, padding: 12, border: "1px solid #555", borderRadius: 8 }}>
+          <div><b>Informácie o podpise</b></div>
+          <div>Podpísal: {parseSignedBy(signatureInfo.signedBy)}</div>
+          <details>
+            <summary>Detail certifikátu</summary>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>{signatureInfo.signedBy}</div>
+          </details>
+          <div>Vydavateľ certifikátu: {parseIssuer(signatureInfo.issuedBy)}</div>
+          <div>Dátum podpisu: {signatureInfo.signedAt}</div>
+          <div>Typ podpisu: {signatureInfo.type}</div>
+          <div>Profil: {signatureInfo.profile}</div>
+        </div>
       )}
     </div>
   );
