@@ -67,6 +67,8 @@ export default function App() {
 
   const [sigType, setSigType] = useState("text"); // "text" | "image"
 
+  const [verifyResult, setVerifyResult] = useState(null);
+const [isVerifying, setIsVerifying] = useState(false);
 
   async function loadPdf(f) {
     const data = await f.arrayBuffer();
@@ -242,6 +244,30 @@ async function signDocument() {
   }
 }
 
+async function verifySignatures() {
+  if (!currentPdfBlob) {
+    alert("Nie je čo overiť.");
+    return;
+  }
+  setIsVerifying(true);
+  try {
+    const form = new FormData();
+    form.append("file", new File([currentPdfBlob], currentPdfName, { type: "application/pdf" }));
+
+    const res = await fetch("http://127.0.0.1:8000/verify", {
+      method: "POST",
+      body: form,
+    });
+
+    const data = await res.json();
+    setVerifyResult(data.signatures);
+  } catch (err) {
+    alert("Chyba pri overovaní.");
+  } finally {
+    setIsVerifying(false);
+  }
+}
+
   return (
     <div style={{ padding: 20, color: "white" }}>
       <h2>PDF preview + výber podpisu</h2>
@@ -293,6 +319,10 @@ async function signDocument() {
             onClick={signDocument}
         >
             {isSigning ? "Podpisujem..." : "Podpísať dokument"}
+        </button>
+
+        <button disabled={!currentPdfBlob || isVerifying} onClick={verifySignatures}>
+            {isVerifying ? "Overujem..." : "Overiť podpisy"}
         </button>
 
         <select value={sigType} onChange={(e) => setSigType(e.target.value)}>
@@ -400,6 +430,27 @@ async function signDocument() {
               </a>
           </div>
       )}
+      {verifyResult && (
+  <div style={{ marginTop: 12 }}>
+    <h3>Výsledok overenia</h3>
+    {verifyResult.length === 0 && <p>Žiadne podpisy nenájdené.</p>}
+    {verifyResult.map((sig, i) => (
+      <div key={i} style={{
+        border: `1px solid ${sig.valid ? "green" : "red"}`,
+        padding: 10, marginTop: 8, borderRadius: 6
+      }}>
+        <b>{sig.valid ? "✅ Platný" : "❌ Neplatný"}</b>
+        {sig.signedBy && <div>Podpisovateľ: {sig.signedBy}</div>}
+        {sig.issuedBy && <div>Vydavateľ: {sig.issuedBy}</div>}
+        {sig.signedAt && <div>Čas: {sig.signedAt}</div>}
+        {sig.certValid !== undefined && (
+            <div>Certifikát: {sig.certValid ? "✅ Dôveryhodný" : "⚠️ Nedôveryhodný"}</div>
+        )}
+        {sig.error && <div>Chyba: {sig.error}</div>}
+      </div>
+    ))}
+  </div>
+)}
       {signatureInfo && (
         <div style={{ marginTop: 12, padding: 12, border: "1px solid #555", borderRadius: 8 }}>
           <div><b>Informácie o podpise</b></div>
