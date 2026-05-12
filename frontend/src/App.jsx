@@ -1,485 +1,157 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
-import { Rnd } from "react-rnd"
 
-import SignatureCanvas from "./SignatureCanvas";
+import StepIndicator from "./components/StepIndicator";
+import Step1Upload from "./components/Step1Upload";
+import Step2Visual from "./components/Step2Visual";
+import Step3Sign from "./components/Step3Sign";
+import VerifyPage from "./components/VerifyPage";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
-function parseSignedBy(dn) {
-    if(!dn) return "Neznáme";
-
-    const parts = dn.split(",");
-    const obj = {};
-
-    parts.forEach(p => {
-        const [key, value] = p.split("=");
-        if(key && value) obj[key.trim()] = value.trim();
-    });
-
-    return `${obj.GIVENNAME || ""} ${obj.SURNAME || ""}`.trim() || obj.CN || dn;
-}
-
-function parseIssuer(dn) {
-  if (!dn) return "Neznáme";
-
-  const parts = dn.split(",");
-  const obj = {};
-
-  parts.forEach(p => {
-    const [key, value] = p.split("=");
-    if (key && value) obj[key.trim()] = value.trim();
-  });
-
-  return obj.O || obj.CN || dn;
-}
-
 export default function App() {
-  const canvasRef = useRef(null);
-  const wrapRef = useRef(null);
+  // "idle" | "pdf_loaded" | "visual_added" | "signed"
+  const [step, setStep] = useState(1);
+  const [showVerify, setShowVerify] = useState(false);
 
   const [file, setFile] = useState(null);
-
-  const [currentPdfBlob, setCurrentPdfBlob] = useState(null);
-    const [currentPdfName, setCurrentPdfName] = useState("document.pdf");
-    const [signedPdfUrl, setSignedPdfUrl] = useState(null);
-    const [isSigning, setIsSigning] = useState(false);
-
   const [pdfDoc, setPdfDoc] = useState(null);
+  const [currentPdfBlob, setCurrentPdfBlob] = useState(null);
+  const [currentPdfName, setCurrentPdfName] = useState("document.pdf");
 
-  const [pageNum, setPageNum] = useState(1); // pdf.js 1-based
-  const [scale, setScale] = useState(1.5);
-
-  // zoznam obdlznikov (origin hore-vľavo)
-  const [rects, setRects] = useState([]);
-
-  const [sigText, setSigText] = useState("Meno Priezvisko");
-
-  const [signatureInfo, setSignatureInfo] = useState(null);
-  const [padesLevel, setPadesLevel] = useState("PAdES_BASELINE_B");
-
-  const [preparedUrl, setPreparedUrl] = useState(null);
-  const [isRendering, setIsRendering] = useState(false);
-
-  // obrazok/sken podpisu
-  const [sigImage, setSigImage] = useState(null);
-
-  const [sigType, setSigType] = useState("text"); // "text" | "image"
-
-  const [verifyResult, setVerifyResult] = useState(null);
-const [isVerifying, setIsVerifying] = useState(false);
-
-  async function loadPdf(f) {
+  async function handleFileLoaded(f) {
+    setFile(f);
+    setCurrentPdfBlob(f);
+    setCurrentPdfName(f.name);
     const data = await f.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data }).promise;
     setPdfDoc(pdf);
-    setPageNum(1);
-    //setRect(null);
-    setPreparedUrl(null);
+    setStep(2);
   }
-
-  async function renderPage() {
-    if (!pdfDoc) return;
-    setIsRendering(true);
-
-    const page = await pdfDoc.getPage(pageNum);
-    const viewport = page.getViewport({ scale });
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-
-    // reset + resize
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    setIsRendering(false);
-  }
-
-  useEffect(() => {
-    renderPage().catch(console.error);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdfDoc, pageNum, scale]);
-
-  // klik do canvasu -> vytvor default podpisový obdĺžnik
-  function onCanvasClick(e) {
-    if (!pdfDoc) return;
-
-    const canvas = canvasRef.current;
-    const r = canvas.getBoundingClientRect();
-
-    const x = e.clientX - r.left;
-    const y = e.clientY - r.top;
-
-    const defaultW = 200;
-    const defaultH = 80;
-
-    // nech obdĺžnik nevybehne mimo canvas
-    const w = Math.min(defaultW, canvas.width - x);
-    const h = Math.min(defaultH, canvas.height - y);
-
-    setRects(prev => [...prev, { x, y, w, h, page: pageNum}]);
-  }
-
-  async function prepareVisual() {
-  if (!file || !pdfDoc || rects.length === 0) {
-    alert("Nahraj PDF a klikni do dokumentu kde chceš podpis.");
-    return;
-  }
-
-  const form = new FormData();
-  form.append("file", new File([currentPdfBlob], currentPdfName, { type: "application/pdf" }));
-
-  // serializuj zoznam obdĺžnikov ako JSON
-  const signatures = await Promise.all(rects.map(async (r) => {
-    const page = await pdfDoc.getPage(r.page);
-    const viewport = page.getViewport({ scale });
-    const pageHeightPx = viewport.height;
-
-    return {
-      page: r.page - 1, // 0-based pre backend
-      x: r.x / scale,
-      y: (pageHeightPx - (r.y + r.h)) / scale,
-      w: r.w / scale,
-      h: r.h / scale,
-    };
-  }));
-
-  form.append("signatures", JSON.stringify(signatures));
-  form.append("text", sigType === "text" ? sigText : "");
-  if ((sigType === "image" || sigType === "sketch") && sigImage) {
-    form.append("image", sigImage);
-  }
-
-  const res = await fetch("http://127.0.0.1:8000/prepare-visual-multi", {
-    method: "POST",
-    body: form,
-  });
-
-  if (!res.ok) {
-    alert("Chyba: " + await res.text());
-    return;
-  }
-
-  const blob = await res.blob();
-  setCurrentPdfBlob(blob);
-  setCurrentPdfName(`prepared_${currentPdfName}`);
-  setRects([]); // vyčisti po úspešnom vložení
-  await loadPdf(blob);
-}
-
-async function signDocument() {
-  if (!currentPdfBlob) {
-    alert("Nie je čo podpísať.");
-    return;
-  }
-
-  setIsSigning(true);
-
-  try {
-    const fileToSign = new File([currentPdfBlob], currentPdfName, {
-      type: "application/pdf",
-    });
-
-    const form = new FormData();
-    form.append("file", fileToSign);
-    form.append("level", padesLevel);
-
-    const res = await fetch("http://127.0.0.1:8000/sign", {
-      method: "POST",
-      body: form,
-    });
-
-    const contentType = res.headers.get("content-type") || "";
-    const signedBy = res.headers.get("X-Signed-By");
-    const issuedBy = res.headers.get("X-Issued-By");
-
-    if (!res.ok) {
-      try {
-          const err = await res.json();
-          alert("Chyba pri podpisovaní: " + (err.detail || "Neznáma chyba"));
-      } catch {
-          const text = await res.text();
-          alert("Chyba pri podpisovaní: " + text);
-      }
-      return;
-    }
-
-    if (contentType.includes("application/pdf")) {
-      const signedBlob = await res.blob();
-      const url = URL.createObjectURL(signedBlob);
-
-      setSignedPdfUrl(url);
-
-      const now = new Date().toLocaleString();
-      const profileLabel = padesLevel === "PAdES_BASELINE_T" ? "PAdES-T" : "PAdES-B";
-
-      setSignatureInfo({
-        signedBy,
-        issuedBy,
-        signedAt: now,
-        type: "Kvalifikovaný elektronický podpis (QES)",
-        profile: profileLabel
-      })
-
-      // nastav podpísaný dokument ako aktuálny
-      setCurrentPdfBlob(signedBlob);
-      setCurrentPdfName(`signed_${currentPdfName}`);
-
-      await loadPdf(signedBlob);
-      return;
-    }
-
-    const data = await res.json();
-    alert(data.message || "Podpisovanie zlyhalo.");
-  } catch (err) {
-    console.error(err);
-    alert("Nepodarilo sa spojiť s backendom.");
-  } finally {
-    setIsSigning(false);
-  }
-}
-
-async function verifySignatures() {
-  if (!currentPdfBlob) {
-    alert("Nie je čo overiť.");
-    return;
-  }
-  setIsVerifying(true);
-  try {
-    const form = new FormData();
-    form.append("file", new File([currentPdfBlob], currentPdfName, { type: "application/pdf" }));
-
-    const res = await fetch("http://127.0.0.1:8000/verify", {
-      method: "POST",
-      body: form,
-    });
-
-    const data = await res.json();
-    setVerifyResult(data.signatures);
-  } catch (err) {
-    alert("Chyba pri overovaní.");
-  } finally {
-    setIsVerifying(false);
-  }
-}
 
   return (
-    <div style={{ padding: 20, color: "white" }}>
-      <h2>PDF preview + výber podpisu</h2>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 
-      <input
-        type="file"
-        accept="application/pdf"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (!f) return;
-          setFile(f);
-          setCurrentPdfBlob(f);
-            setCurrentPdfName(f.name);
-          loadPdf(f).catch((err) => {
-            console.error(err);
-            alert("Nepodarilo sa načítať PDF (pozri konzolu).");
-          });
-        }}
-      />
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
-      <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
-        <button disabled={!pdfDoc || pageNum <= 1 || isRendering} onClick={() => setPageNum((p) => p - 1)}>
-          ◀ Prev
-        </button>
-        <div>
-          Strana: <b>{pageNum}</b> / {pdfDoc?.numPages ?? "-"}
+        body {
+          background: #f3f4f6;
+          min-height: 100vh;
+          font-family: 'DM Sans', sans-serif;
+        }
+
+        .app-header {
+          background: #fff;
+          border-bottom: 1px solid #e8eaf0;
+          padding: 0 32px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          height: 56px;
+          position: sticky;
+          top: 0;
+          z-index: 100;
+        }
+
+        .app-logo {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 17px;
+          font-weight: 700;
+          color: #111827;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .header-nav {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .nav-btn {
+          padding: 7px 16px;
+          border-radius: 8px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s;
+          border: 1px solid transparent;
+        }
+
+        .nav-btn.ghost {
+          background: transparent;
+          color: #374151;
+          border-color: #e8eaf0;
+        }
+        .nav-btn.ghost:hover { background: #f3f4f6; }
+
+        .nav-btn.active {
+          background: #eff6ff;
+          color: #2563eb;
+          border-color: #bfdbfe;
+        }
+      `}</style>
+
+      <div className="app-header">
+        <div className="app-logo">
+          ✍️ PodpisApp
         </div>
-        <button disabled={!pdfDoc || pageNum >= (pdfDoc?.numPages ?? 1) || isRendering} onClick={() => setPageNum((p) => p + 1)}>
-          Next ▶
-        </button>
-
-        <div style={{ marginLeft: 12 }}>
-          Zoom:{" "}
-          <input
-            type="number"
-            step="0.1"
-            value={scale}
-            onChange={(e) => setScale(Number(e.target.value))}
-            style={{ width: 70 }}
-          />
+        <div className="header-nav">
+          <button
+            className={`nav-btn ${!showVerify ? "active" : "ghost"}`}
+            onClick={() => setShowVerify(false)}
+          >
+            Podpísať dokument
+          </button>
+          <button
+            className={`nav-btn ${showVerify ? "active" : "ghost"}`}
+            onClick={() => setShowVerify(true)}
+          >
+            Overiť podpis
+          </button>
         </div>
+      </div>
 
-        <button disabled={!pdfDoc || rects.length === 0} onClick={prepareVisual} style={{ marginLeft: 12 }}>
-  Pridať vizuálny podpis
-</button>
+      {showVerify ? (
+        <VerifyPage />
+      ) : (
+        <>
+          <StepIndicator currentStep={step} />
 
-        <button
-            disabled={!currentPdfBlob || isSigning}
-            onClick={signDocument}
-        >
-            {isSigning ? "Podpisujem..." : "Podpísať dokument"}
-        </button>
+          {step === 1 && (
+            <Step1Upload onFileLoaded={handleFileLoaded} />
+          )}
 
-        <button disabled={!currentPdfBlob || isVerifying} onClick={verifySignatures}>
-            {isVerifying ? "Overujem..." : "Overiť podpisy"}
-        </button>
-
-        <select value={sigType} onChange={(e) => setSigType(e.target.value)}>
-            <option value="text">Text</option>
-            <option value="image">Obrázok</option>
-            <option value="sketch">Kresba</option>
-
-        </select>
-        {sigType === "text" && (
-            <input
-                value={sigText}
-                onChange={(e) => setSigText(e.target.value)}
-                placeholder="Text podpisu"
-                style={{ width: 200 }}
+          {step === 2 && (
+            <Step2Visual
+              file={file}
+              pdfDoc={pdfDoc}
+              setPdfDoc={setPdfDoc}
+              currentPdfBlob={currentPdfBlob}
+              setCurrentPdfBlob={setCurrentPdfBlob}
+              currentPdfName={currentPdfName}
+              setCurrentPdfName={setCurrentPdfName}
+              onNext={() => setStep(3)}
+              onBack={() => setStep(1)}
             />
-        )}
-        {sigType === "image" && (
-            <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setSigImage(e.target.files?.[0] ?? null)}
+          )}
+
+          {step === 3 && (
+            <Step3Sign
+              currentPdfBlob={currentPdfBlob}
+              currentPdfName={currentPdfName}
+              setCurrentPdfBlob={setCurrentPdfBlob}
+              setCurrentPdfName={setCurrentPdfName}
+              onBack={() => setStep(2)}
             />
-        )}
-        {sigType === "sketch" && (
-            <SignatureCanvas onSave={(blob) => setSigImage(blob)} />
-        )}
-        <div style={{ marginLeft: 12 }}>
-           Profil PAdES:{" "}
-  <select
-    value={padesLevel}
-    onChange={(e) => setPadesLevel(e.target.value)}
-  >
-    <option value="PAdES_BASELINE_B">PAdES-B</option>
-    <option value="PAdES_BASELINE_T">PAdES-T</option>
-  </select>
-</div>
-      </div>
-
-      <div
-        ref={wrapRef}
-        style={{
-          marginTop: 12,
-          position: "relative",
-          display: "inline-block",
-          border: "1px solid #444",
-        }}
-      >
-        <canvas
-          ref={canvasRef}
-          onClick={onCanvasClick}
-          style={{ display: "block", cursor: "crosshair" }}
-        />
-
-        {/* overlay obdĺžniky */}
-        {rects
-  .filter(r => r.page === pageNum)
-  .map((r, i) => (
-    <Rnd
-      key={i}
-      bounds="parent"
-      size={{ width: r.w, height: r.h }}
-      position={{ x: r.x, y: r.y }}
-      onDragStop={(e, d) => {
-        setRects(prev => prev.map((item, idx) =>
-          idx === i ? { ...item, x: d.x, y: d.y } : item
-        ));
-      }}
-      onResizeStop={(e, direction, ref, delta, position) => {
-        setRects(prev => prev.map((item, idx) =>
-          idx === i ? { ...item, x: position.x, y: position.y, w: ref.offsetWidth, h: ref.offsetHeight } : item
-        ));
-      }}
-      style={{
-        border: "2px dashed red",
-        background: "rgba(255,0,0,0.12)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 12,
-        fontWeight: "bold",
-      }}
-    >
-      {sigText}
-      {/* tlačidlo na zmazanie konkrétneho obdĺžnika */}
-      <span
-        onClick={(e) => {
-          e.stopPropagation();
-          setRects(prev => prev.filter((_, idx) => idx !== i));
-        }}
-        style={{
-          position: "absolute", top: 2, right: 4,
-          cursor: "pointer", color: "red", fontWeight: "bold"
-        }}
-      >
-        ✕
-      </span>
-    </Rnd>
-    ))}
-
-
-      </div>
-
-      {rects.length > 0 && (
-  <div style={{ marginTop: 10, fontSize: 14, opacity: 0.9 }}>
-    Počet podpisov: {rects.length}
-  </div>
-)}
-
-      {preparedUrl && (
-        <div style={{ marginTop: 12 }}>
-          <a href={preparedUrl} download="prepared.pdf" style={{ color: "#8fd3ff" }}>
-            Stiahnuť prepared.pdf
-          </a>
-        </div>
+          )}
+        </>
       )}
-      {signedPdfUrl && (
-          <div style={{ marginTop: 12}}>
-              <a href={signedPdfUrl} download="signed.pdf" style={{ color: "8fd3ff" }}>
-                  Stiahnúť signed.pdf
-              </a>
-          </div>
-      )}
-      {verifyResult && (
-  <div style={{ marginTop: 12 }}>
-    <h3>Výsledok overenia</h3>
-    {verifyResult.length === 0 && <p>Žiadne podpisy nenájdené.</p>}
-    {verifyResult.map((sig, i) => (
-      <div key={i} style={{
-        border: `1px solid ${sig.valid ? "green" : "red"}`,
-        padding: 10, marginTop: 8, borderRadius: 6
-      }}>
-        <b>{sig.valid ? "✅ Platný" : "❌ Neplatný"}</b>
-        {sig.signedBy && <div>Podpisovateľ: {sig.signedBy}</div>}
-        {sig.issuedBy && <div>Vydavateľ: {sig.issuedBy}</div>}
-        {sig.signedAt && <div>Čas: {sig.signedAt}</div>}
-        {sig.certValid !== undefined && (
-            <div>Certifikát: {sig.certValid ? "✅ Dôveryhodný" : "⚠️ Nedôveryhodný"}</div>
-        )}
-        {sig.error && <div>Chyba: {sig.error}</div>}
-      </div>
-    ))}
-  </div>
-)}
-      {signatureInfo && (
-        <div style={{ marginTop: 12, padding: 12, border: "1px solid #555", borderRadius: 8 }}>
-          <div><b>Informácie o podpise</b></div>
-          <div>Podpísal: {parseSignedBy(signatureInfo.signedBy)}</div>
-          <details>
-            <summary>Detail certifikátu</summary>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>{signatureInfo.signedBy}</div>
-          </details>
-          <div>Vydavateľ certifikátu: {parseIssuer(signatureInfo.issuedBy)}</div>
-          <div>Dátum podpisu: {signatureInfo.signedAt}</div>
-          <div>Typ podpisu: {signatureInfo.type}</div>
-          <div>Profil: {signatureInfo.profile}</div>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
