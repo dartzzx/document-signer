@@ -21,6 +21,8 @@ import glob
 
 from asn1crypto import pem, x509
 
+import json
+
 app = FastAPI()
 
 # prepojenie medzi f-endom a b-endom
@@ -44,6 +46,9 @@ async def prepare_visual(
     params: VisualSignatureParams = Depends(VisualSignatureParams.as_form)
 ):
     pdf_bytes = await file.read()
+
+    if not pdf_bytes.startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="Súbor nie je PDF")
 
     MAX_FILE_SIZE = 10 * 1024 * 1024
 
@@ -72,6 +77,47 @@ async def prepare_visual(
         headers={"Content-Disposition": f'attachment; filename="prepared_{file.filename}"'}
     )
 
+@app.post("/prepare-visual-multi")
+async def prepare_visual_multi(
+    file: UploadFile = File(...),
+    image: Optional[UploadFile] = File(None),
+    signatures: str = Form(...),  # JSON string
+    text: Optional[str] = Form(None),
+):
+    pdf_bytes = await file.read()
+
+    if not pdf_bytes.startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="Súbor nie je PDF")
+
+    if len(pdf_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Súbor je príliš veľký (max 10 MB).")
+
+    try:
+        sig_list = json.loads(signatures)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Neplatný formát signatures JSON")
+
+    image_bytes = await image.read() if image else None
+
+    # aplikuj všetky podpisy postupne
+    current_pdf = pdf_bytes
+    for sig in sig_list:
+        current_pdf = add_visual_signature(
+            pdf_bytes=current_pdf,
+            page_index=sig["page"],
+            x=sig["x"],
+            y=sig["y"],
+            w=sig["w"],
+            h=sig["h"],
+            text=text,
+            image_bytes=image_bytes,
+        )
+
+    return Response(
+        content=current_pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="prepared_{file.filename}"'}
+    )
 
 @app.post("/sign")
 async def sign_document(file: UploadFile = File(...), level: str = Form("PAdES_BASELINE_B")):

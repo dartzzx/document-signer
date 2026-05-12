@@ -51,8 +51,8 @@ export default function App() {
   const [pageNum, setPageNum] = useState(1); // pdf.js 1-based
   const [scale, setScale] = useState(1.5);
 
-  // rectangle v UI pixeloch (origin hore-vľavo)
-  const [rect, setRect] = useState(null);
+  // zoznam obdlznikov (origin hore-vľavo)
+  const [rects, setRects] = useState([]);
 
   const [sigText, setSigText] = useState("Meno Priezvisko");
 
@@ -75,7 +75,7 @@ const [isVerifying, setIsVerifying] = useState(false);
     const pdf = await pdfjsLib.getDocument({ data }).promise;
     setPdfDoc(pdf);
     setPageNum(1);
-    setRect(null);
+    //setRect(null);
     setPreparedUrl(null);
   }
 
@@ -122,55 +122,55 @@ const [isVerifying, setIsVerifying] = useState(false);
     const w = Math.min(defaultW, canvas.width - x);
     const h = Math.min(defaultH, canvas.height - y);
 
-    setRect({ x, y, w, h });
+    setRects(prev => [...prev, { x, y, w, h, page: pageNum}]);
   }
 
   async function prepareVisual() {
-    if (!file || !pdfDoc || !rect) {
-      alert("Nahraj PDF a klikni do dokumentu, kde chceš podpis.");
-      return;
-    }
+  if (!file || !pdfDoc || rects.length === 0) {
+    alert("Nahraj PDF a klikni do dokumentu kde chceš podpis.");
+    return;
+  }
 
-    const page = await pdfDoc.getPage(pageNum);
+  const form = new FormData();
+  form.append("file", new File([currentPdfBlob], currentPdfName, { type: "application/pdf" }));
+
+  // serializuj zoznam obdĺžnikov ako JSON
+  const signatures = await Promise.all(rects.map(async (r) => {
+    const page = await pdfDoc.getPage(r.page);
     const viewport = page.getViewport({ scale });
     const pageHeightPx = viewport.height;
 
-    // UI(px, origin hore-vľavo) -> PDF(points, origin dole-vľavo)
-    const xPdf = rect.x / scale;
-    const wPdf = rect.w / scale;
-    const hPdf = rect.h / scale;
-    const yPdf = (pageHeightPx - (rect.y + rect.h)) / scale;
+    return {
+      page: r.page - 1, // 0-based pre backend
+      x: r.x / scale,
+      y: (pageHeightPx - (r.y + r.h)) / scale,
+      w: r.w / scale,
+      h: r.h / scale,
+    };
+  }));
 
-    const form = new FormData();
-    form.append("file", file);
-    form.append("page", String(pageNum - 1)); // backend 0-based
-    form.append("x", String(xPdf));
-    form.append("y", String(yPdf));
-    form.append("w", String(wPdf));
-    form.append("h", String(hPdf));
-
-    form.append("text", sigType === "text" ? sigText : "");
-    if ((sigType === "image" || sigType === "sketch") && sigImage) form.append("image", sigImage);
-
-    const res = await fetch("http://127.0.0.1:8000/prepare-visual", {
-      method: "POST",
-      body: form,
-    });
-
-    if (!res.ok) {
-      const t = await res.text();
-      alert("Chyba z backendu: " + t);
-      return;
-    }
-
-    const preparedBlob = await res.blob();
-
-    setCurrentPdfBlob(preparedBlob);
-    setCurrentPdfName(`prepared_${currentPdfName}`);
-
-    // reload PDF v preview
-    await loadPdf(preparedBlob);
+  form.append("signatures", JSON.stringify(signatures));
+  form.append("text", sigType === "text" ? sigText : "");
+  if ((sigType === "image" || sigType === "sketch") && sigImage) {
+    form.append("image", sigImage);
   }
+
+  const res = await fetch("http://127.0.0.1:8000/prepare-visual-multi", {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    alert("Chyba: " + await res.text());
+    return;
+  }
+
+  const blob = await res.blob();
+  setCurrentPdfBlob(blob);
+  setCurrentPdfName(`prepared_${currentPdfName}`);
+  setRects([]); // vyčisti po úspešnom vložení
+  await loadPdf(blob);
+}
 
 async function signDocument() {
   if (!currentPdfBlob) {
@@ -310,9 +310,9 @@ async function verifySignatures() {
           />
         </div>
 
-        <button disabled={!pdfDoc || !rect} onClick={prepareVisual} style={{ marginLeft: 12 }}>
-          Pridať vizuálny podpis
-        </button>
+        <button disabled={!pdfDoc || rects.length === 0} onClick={prepareVisual} style={{ marginLeft: 12 }}>
+  Pridať vizuálny podpis
+</button>
 
         <button
             disabled={!currentPdfBlob || isSigning}
@@ -376,45 +376,60 @@ async function verifySignatures() {
           style={{ display: "block", cursor: "crosshair" }}
         />
 
-        {/* overlay obdĺžnik */}
-        {rect && (
-          <Rnd
-            bounds="parent"
-            size={{ width: rect.w, height: rect.h }}
-            position={{ x: rect.x, y: rect.y }}
-            onDragStop={(e, d) => {
-              setRect((r) => ({ ...r, x: d.x, y: d.y }));
-            }}
-            onResizeStop={(e, direction, ref, delta, position) => {
-              setRect({
-                x: position.x,
-                y: position.y,
-                w: ref.offsetWidth,
-                h: ref.offsetHeight,
-              });
-            }}
-            style={{
-              border: "2px dashed red",
-              background: "rgba(255,0,0,0.12)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 12,
-              fontWeight: "bold",
-            }}
-          >
-            {sigText}
-          </Rnd>
-        )}
+        {/* overlay obdĺžniky */}
+        {rects
+  .filter(r => r.page === pageNum)
+  .map((r, i) => (
+    <Rnd
+      key={i}
+      bounds="parent"
+      size={{ width: r.w, height: r.h }}
+      position={{ x: r.x, y: r.y }}
+      onDragStop={(e, d) => {
+        setRects(prev => prev.map((item, idx) =>
+          idx === i ? { ...item, x: d.x, y: d.y } : item
+        ));
+      }}
+      onResizeStop={(e, direction, ref, delta, position) => {
+        setRects(prev => prev.map((item, idx) =>
+          idx === i ? { ...item, x: position.x, y: position.y, w: ref.offsetWidth, h: ref.offsetHeight } : item
+        ));
+      }}
+      style={{
+        border: "2px dashed red",
+        background: "rgba(255,0,0,0.12)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 12,
+        fontWeight: "bold",
+      }}
+    >
+      {sigText}
+      {/* tlačidlo na zmazanie konkrétneho obdĺžnika */}
+      <span
+        onClick={(e) => {
+          e.stopPropagation();
+          setRects(prev => prev.filter((_, idx) => idx !== i));
+        }}
+        style={{
+          position: "absolute", top: 2, right: 4,
+          cursor: "pointer", color: "red", fontWeight: "bold"
+        }}
+      >
+        ✕
+      </span>
+    </Rnd>
+    ))}
 
 
       </div>
 
-      {rect && (
-        <div style={{ marginTop: 10, fontSize: 14, opacity: 0.9 }}>
-          Vybrané: x={rect.x.toFixed(0)} y={rect.y.toFixed(0)} w={rect.w.toFixed(0)} h={rect.h.toFixed(0)}
-        </div>
-      )}
+      {rects.length > 0 && (
+  <div style={{ marginTop: 10, fontSize: 14, opacity: 0.9 }}>
+    Počet podpisov: {rects.length}
+  </div>
+)}
 
       {preparedUrl && (
         <div style={{ marginTop: 12 }}>
