@@ -167,7 +167,7 @@ def load_trust_roots():
     return certs
 
 def run_verify(pdf_bytes: bytes):
-    reader = PdfFileReader(BytesIO(pdf_bytes))
+    reader = PdfFileReader(BytesIO(pdf_bytes), strict=False)
     sigs = reader.embedded_signatures
 
     if not sigs:
