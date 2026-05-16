@@ -6,9 +6,11 @@ export default function SignatureCanvas({ onSave }) {
 
   function getPos(e, canvas) {
     const r = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / r.width;
+    const scaleY = canvas.height / r.height;
     return {
-      x: e.clientX - r.left,
-      y: e.clientY - r.top,
+      x: (e.clientX - r.left) * scaleX,
+      y: (e.clientY - r.top) * scaleY,
     };
   }
 
@@ -58,11 +60,32 @@ export default function SignatureCanvas({ onSave }) {
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
-        style={{ border: "1px solid #888", background: "white", cursor: "crosshair" }}
+        style={{
+          border: "1px solid #d1d5e0",
+          background: "white",
+          cursor: "crosshair",
+          width: "100%",
+          height: "120px",
+          borderRadius: 8,
+          display: "block",
+        }}
       />
       <div style={{ marginTop: 6, display: "flex", gap: 8 }}>
-        <button onClick={clear}>Vymazať</button>
-        <button onClick={save}>Použiť podpis</button>
+        <button onClick={clear} style={{
+          flex: 1, padding: "7px 0", border: "1px solid #d1d5e0",
+          borderRadius: 8, background: "#fff", cursor: "pointer",
+          fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#374151"
+        }}>
+          Vymazať
+        </button>
+        <button onClick={save} style={{
+          flex: 1, padding: "7px 0", border: "none",
+          borderRadius: 8, background: "#2563eb",
+          cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+          fontSize: 13, color: "#fff", fontWeight: 600
+        }}>
+          Použiť podpis
+        </button>
       </div>
     </div>
   );
