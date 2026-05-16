@@ -1,6 +1,7 @@
 import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
+import { PenLine, ShieldCheck } from "lucide-react";
 
 import StepIndicator from "./components/StepIndicator";
 import Step1Upload from "./components/Step1Upload";
@@ -11,7 +12,6 @@ import VerifyPage from "./components/VerifyPage";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export default function App() {
-  // "idle" | "pdf_loaded" | "visual_added" | "signed"
   const [step, setStep] = useState(1);
   const [showVerify, setShowVerify] = useState(false);
 
@@ -42,6 +42,9 @@ export default function App() {
           min-height: 100vh;
           font-family: 'DM Sans', sans-serif;
         }
+        button { color: inherit; }
+        select { color: #374151; }
+        input  { color: #374151; }
 
         .app-header {
           background: #fff;
@@ -55,7 +58,6 @@ export default function App() {
           top: 0;
           z-index: 100;
         }
-
         .app-logo {
           font-family: 'DM Sans', sans-serif;
           font-size: 17px;
@@ -65,13 +67,11 @@ export default function App() {
           align-items: center;
           gap: 8px;
         }
-
         .header-nav {
           display: flex;
           align-items: center;
           gap: 8px;
         }
-
         .nav-btn {
           padding: 7px 16px;
           border-radius: 8px;
@@ -81,15 +81,16 @@ export default function App() {
           cursor: pointer;
           transition: all 0.15s;
           border: 1px solid transparent;
+          display: flex;
+          align-items: center;
+          gap: 6px;
         }
-
         .nav-btn.ghost {
           background: transparent;
           color: #374151;
           border-color: #e8eaf0;
         }
         .nav-btn.ghost:hover { background: #f3f4f6; }
-
         .nav-btn.active {
           background: #eff6ff;
           color: #2563eb;
@@ -99,19 +100,22 @@ export default function App() {
 
       <div className="app-header">
         <div className="app-logo">
-          ✍️ PodpisApp
+          <PenLine size={18} color="#2563eb" />
+          PodpisApp
         </div>
         <div className="header-nav">
           <button
             className={`nav-btn ${!showVerify ? "active" : "ghost"}`}
             onClick={() => setShowVerify(false)}
           >
+            <PenLine size={14} />
             Podpísať dokument
           </button>
           <button
             className={`nav-btn ${showVerify ? "active" : "ghost"}`}
             onClick={() => setShowVerify(true)}
           >
+            <ShieldCheck size={14} />
             Overiť podpis
           </button>
         </div>
@@ -122,11 +126,7 @@ export default function App() {
       ) : (
         <>
           <StepIndicator currentStep={step} />
-
-          {step === 1 && (
-            <Step1Upload onFileLoaded={handleFileLoaded} />
-          )}
-
+          {step === 1 && <Step1Upload onFileLoaded={handleFileLoaded} />}
           {step === 2 && (
             <Step2Visual
               file={file}
@@ -140,7 +140,6 @@ export default function App() {
               onBack={() => setStep(1)}
             />
           )}
-
           {step === 3 && (
             <Step3Sign
               currentPdfBlob={currentPdfBlob}

@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { Upload, CheckCircle, XCircle, AlertTriangle, Info } from "lucide-react";
 
 export default function VerifyPage() {
   const [dragging, setDragging] = useState(false);
@@ -67,12 +68,18 @@ export default function VerifyPage() {
           border-color: #2563eb;
           background: #eff6ff;
         }
+        .verify-dropzone .dropzone-icon {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 12px;
+          color: #94a3b8;
+        }
         .verify-dropzone h3 {
           font-family: 'DM Sans', sans-serif;
           font-size: 16px;
           font-weight: 600;
           color: #374151;
-          margin: 12px 0 4px;
+          margin: 0 0 4px;
         }
         .verify-dropzone p {
           font-family: 'DM Sans', sans-serif;
@@ -99,6 +106,9 @@ export default function VerifyPage() {
           font-size: 15px;
           font-weight: 700;
           margin: 0 0 8px;
+          display: flex;
+          align-items: center;
+          gap: 7px;
         }
         .sig-result.valid h4 { color: #15803d; }
         .sig-result.invalid h4 { color: #dc2626; }
@@ -107,6 +117,10 @@ export default function VerifyPage() {
           font-size: 13px;
           color: #374151;
           margin: 3px 0;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          flex-wrap: wrap;
         }
         .side-card {
           background: #fff;
@@ -151,6 +165,9 @@ export default function VerifyPage() {
           font-size: 12px;
           color: #2563eb;
           line-height: 1.5;
+          display: flex;
+          gap: 8px;
+          align-items: flex-start;
         }
       `}</style>
 
@@ -167,7 +184,9 @@ export default function VerifyPage() {
               onDragLeave={() => setDragging(false)}
               onDrop={(e) => { e.preventDefault(); setDragging(false); verify(e.dataTransfer.files?.[0]); }}
             >
-              <div style={{ fontSize: 36, color: "#94a3b8" }}>⬆️</div>
+              <div className="dropzone-icon">
+                <Upload size={40} strokeWidth={1.5} />
+              </div>
               <h3>Vložiť podpísaný PDF sem</h3>
               <p>alebo kliknite pre výber súboru</p>
             </div>
@@ -199,16 +218,29 @@ export default function VerifyPage() {
               )}
               {results.map((sig, i) => (
                 <div key={i} className={`sig-result ${sig.valid ? "valid" : "invalid"}`}>
-                  <h4>{sig.valid ? "✅ Platný podpis" : "❌ Neplatný podpis"}</h4>
+                  <h4>
+                    {sig.valid
+                      ? <><CheckCircle size={16} /> Platný podpis</>
+                      : <><XCircle size={16} /> Neplatný podpis</>
+                    }
+                  </h4>
                   {sig.signedBy && <div className="sig-detail"><b>Podpisovateľ:</b> {sig.signedBy}</div>}
                   {sig.issuedBy && <div className="sig-detail"><b>Vydavateľ:</b> {sig.issuedBy}</div>}
                   {sig.signedAt && <div className="sig-detail"><b>Čas:</b> {sig.signedAt}</div>}
                   {sig.certValid !== undefined && (
                     <div className="sig-detail">
-                      <b>Certifikát:</b> {sig.certValid ? "✅ Dôveryhodný" : "⚠️ Nedôveryhodný"}
+                      <b>Certifikát:</b>{" "}
+                      {sig.certValid
+                        ? <><CheckCircle size={13} color="#16a34a" /> Dôveryhodný</>
+                        : <><AlertTriangle size={13} color="#d97706" /> Nedôveryhodný</>
+                      }
                     </div>
                   )}
-                  {sig.error && <div className="sig-detail" style={{ color: "#dc2626" }}>Chyba: {sig.error}</div>}
+                  {sig.error && (
+                    <div className="sig-detail" style={{ color: "#dc2626" }}>
+                      Chyba: {sig.error}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -224,14 +256,14 @@ export default function VerifyPage() {
             <ul className="check-list">
               <li>Platnosť certifikátu</li>
               <li>Integritu dokumentu</li>
-              <li>Časovú pečiatku</li>
-              <li>Profil PAdES</li>
+              <li>Časovú pečiatku (ak je prítomná)</li>
             </ul>
           </div>
 
           <div className="important-banner">
-            ℹ️ <b>Dôležité</b><br />
-            Overenie podpisu vyžaduje pripojenie na internet pre kontrolu revokácie certifikátov.
+            <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span><b>Dôležité</b><br />
+            Overenie podpisu vyžaduje pripojenie na internet pre kontrolu revokácie certifikátov.</span>
           </div>
 
           <div className="side-card" style={{ marginTop: 16 }}>

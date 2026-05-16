@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { Upload, CheckCircle, AlertTriangle } from "lucide-react";
 
 export default function Step1Upload({ onFileLoaded }) {
   const [dragging, setDragging] = useState(false);
@@ -66,7 +67,8 @@ export default function Step1Upload({ onFileLoaded }) {
           background: #eff6ff;
         }
         .dropzone-icon {
-          font-size: 40px;
+          display: flex;
+          justify-content: center;
           margin-bottom: 12px;
           color: #94a3b8;
         }
@@ -111,6 +113,9 @@ export default function Step1Upload({ onFileLoaded }) {
           font-family: 'DM Sans', sans-serif;
           font-size: 13px;
           color: #dc2626;
+          display: flex;
+          align-items: center;
+          gap: 8px;
         }
         .tips-card {
           background: #fff;
@@ -181,7 +186,9 @@ export default function Step1Upload({ onFileLoaded }) {
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
           >
-            <div className="dropzone-icon">⬆️</div>
+            <div className="dropzone-icon">
+              <Upload size={40} strokeWidth={1.5} />
+            </div>
             <h3>Vložiť súbor sem</h3>
             <p>alebo kliknite pre výber</p>
             <div className="dropzone-meta">Podporovaný formát: PDF (max 10MB)</div>
@@ -197,10 +204,14 @@ export default function Step1Upload({ onFileLoaded }) {
 
           {fileName && (
             <div className="file-loaded">
-              ✅ {fileName}
+              <CheckCircle size={16} /> {fileName}
             </div>
           )}
-          {error && <div className="error-msg">⚠️ {error}</div>}
+          {error && (
+            <div className="error-msg">
+              <AlertTriangle size={16} /> {error}
+            </div>
+          )}
 
           <button
             className="btn-primary"

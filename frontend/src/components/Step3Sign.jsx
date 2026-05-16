@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CheckCircle, AlertTriangle, Download, Info } from "lucide-react";
 
 function parseSignedBy(dn) {
   if (!dn) return "Neznáme";
@@ -138,6 +139,10 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
           cursor: pointer;
           transition: background 0.2s;
           letter-spacing: 0.01em;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
         }
         .sign-btn:hover:not(:disabled) { background: #1d4ed8; }
         .sign-btn:disabled { background: #c7d2e8; cursor: not-allowed; }
@@ -164,6 +169,9 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
           font-family: 'DM Sans', sans-serif;
           font-size: 13px;
           color: #dc2626;
+          display: flex;
+          align-items: center;
+          gap: 8px;
         }
         .success-box {
           margin-top: 20px;
@@ -178,6 +186,9 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
           font-weight: 700;
           color: #15803d;
           margin: 0 0 12px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
         }
         .sig-detail {
           font-family: 'DM Sans', sans-serif;
@@ -186,7 +197,9 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
           margin: 4px 0;
         }
         .download-btn {
-          display: inline-block;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
           margin-top: 14px;
           padding: 10px 20px;
           background: #16a34a;
@@ -240,16 +253,25 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
           </div>
 
           <button className="sign-btn" disabled={isSigning || !!signedPdfUrl} onClick={signDocument}>
-            {isSigning ? "Podpisujem... (čakajte na Autogram)" : signedPdfUrl ? "✅ Dokument podpísaný" : "Podpísať elektronicky dokument"}
+            {signedPdfUrl
+              ? <><CheckCircle size={17} /> Dokument podpísaný</>
+              : isSigning
+                ? "Podpisujem... (čakajte na Autogram)"
+                : "Podpísať elektronicky dokument"
+            }
           </button>
 
           <button className="back-btn" onClick={onBack}>Späť</button>
 
-          {error && <div className="error-box">⚠️ {error}</div>}
+          {error && (
+            <div className="error-box">
+              <AlertTriangle size={15} /> {error}
+            </div>
+          )}
 
           {signatureInfo && (
             <div className="success-box">
-              <h4>✅ Dokument bol úspešne podpísaný</h4>
+              <h4><CheckCircle size={17} /> Dokument bol úspešne podpísaný</h4>
               <div className="sig-detail"><b>Podpísal:</b> {parseSignedBy(signatureInfo.signedBy)}</div>
               <div className="sig-detail"><b>Vydavateľ:</b> {parseIssuer(signatureInfo.issuedBy)}</div>
               <div className="sig-detail"><b>Dátum:</b> {signatureInfo.signedAt}</div>
@@ -264,7 +286,7 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
               </details>
               {signedPdfUrl && (
                 <a href={signedPdfUrl} download="signed.pdf" className="download-btn">
-                  ⬇ Stiahnuť podpísaný dokument
+                  <Download size={14} /> Stiahnuť podpísaný dokument
                 </a>
               )}
             </div>
@@ -272,7 +294,7 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
         </div>
 
         <div className="helper-card">
-          <h3>ℹ️ Pomocník</h3>
+          <h3><Info size={15} /> Pomocník</h3>
           <p>
             Po kliknutí na tlačidlo sa otvorí aplikácia <b>Autogram</b>.
             Vložte eID kartu do čítačky a potvrďte podpis PIN kódom.
