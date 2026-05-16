@@ -1,18 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
-import { Rnd } from "react-rnd";
 import SignatureCanvas from "./SignatureCanvas";
+import { PenLine, Upload, Type, X, Maximize2, Info, CheckCircle } from "lucide-react";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, setCurrentPdfBlob, currentPdfName, setCurrentPdfName, onNext, onBack }) {
   const canvasRef = useRef(null);
+  const overlayRef = useRef(null);
 
   const [pageNum, setPageNum] = useState(1);
   const [scale, setScale] = useState(1.5);
   const [isRendering, setIsRendering] = useState(false);
 
+  // rects stored in PDF coordinates (scale=1)
   const [rects, setRects] = useState([]);
   const [sigType, setSigType] = useState("sketch");
   const [sigText, setSigText] = useState("Meno Priezvisko");
@@ -22,46 +24,163 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
   const [isPreparing, setIsPreparing] = useState(false);
   const [preparedOk, setPreparedOk] = useState(false);
 
+  const renderTaskRef = useRef(null);
+
+  // Drag state (refs to avoid re-renders during drag)
+  const dragRef = useRef(null);
+
   async function renderPage() {
     if (!pdfDoc) return;
+    if (renderTaskRef.current) {
+      try { renderTaskRef.current.cancel(); } catch {}
+      renderTaskRef.current = null;
+    }
     setIsRendering(true);
     const page = await pdfDoc.getPage(pageNum);
     const viewport = page.getViewport({ scale });
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
     canvas.width = Math.floor(viewport.width);
     canvas.height = Math.floor(viewport.height);
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    const task = page.render({ canvasContext: ctx, viewport });
+    renderTaskRef.current = task;
+    try {
+      await task.promise;
+    } catch (e) {
+      if (e?.name !== "RenderingCancelledException") console.error(e);
+    }
     setIsRendering(false);
   }
 
   useEffect(() => { renderPage().catch(console.error); }, [pdfDoc, pageNum, scale]);
 
+  function mouseToPdf(e) {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) / scale,
+      y: (e.clientY - r.top) / scale,
+    };
+  }
+
   function onCanvasClick(e) {
     if (!pdfDoc || isPreparing) return;
-    const canvas = canvasRef.current;
-    const r = canvas.getBoundingClientRect();
-    const x = e.clientX - r.left;
-    const y = e.clientY - r.top;
-    const defaultW = 200;
-    const defaultH = 80;
+    if (dragRef.current) return;
+    const { x, y } = mouseToPdf(e);
+    const pdfW = 180;
+    const pdfH = 70;
     setRects(prev => [...prev, {
-      x, y,
-      w: Math.min(defaultW, canvas.width - x),
-      h: Math.min(defaultH, canvas.height - y),
-      page: pageNum
+      pdfX: Math.max(0, x - pdfW / 2),
+      pdfY: Math.max(0, y - pdfH / 2),
+      pdfW,
+      pdfH,
+      page: pageNum,
     }]);
   }
 
+  function startDrag(e, index) {
+    e.preventDefault();
+    e.stopPropagation();
+    const { x, y } = mouseToPdf(e);
+    const rect = rects[index];
+    dragRef.current = {
+      index,
+      startMousePdfX: x,
+      startMousePdfY: y,
+      startRectPdfX: rect.pdfX,
+      startRectPdfY: rect.pdfY,
+    };
+  }
+
+  const onMouseMove = useCallback((e) => {
+    if (!dragRef.current) return;
+    e.preventDefault();
+    const { index, startMousePdfX, startMousePdfY, startRectPdfX, startRectPdfY } = dragRef.current;
+    const { x, y } = mouseToPdf(e);
+    const dx = x - startMousePdfX;
+    const dy = y - startMousePdfY;
+
+    const canvas = canvasRef.current;
+    let canvasPdfW = 9999, canvasPdfH = 9999;
+    if (canvas) {
+      canvasPdfW = canvas.width / scale;
+      canvasPdfH = canvas.height / scale;
+    }
+
+    setRects(prev => prev.map((r, i) => {
+      if (i !== index) return r;
+      const newX = Math.max(0, Math.min(startRectPdfX + dx, canvasPdfW - r.pdfW));
+      const newY = Math.max(0, Math.min(startRectPdfY + dy, canvasPdfH - r.pdfH));
+      return { ...r, pdfX: newX, pdfY: newY };
+    }));
+  }, [scale]);
+
+  const onMouseUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [onMouseMove, onMouseUp]);
+
+  const resizeRef = useRef(null);
+
+  function startResize(e, index) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = rects[index];
+    resizeRef.current = {
+      index,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      startPdfW: rect.pdfW,
+      startPdfH: rect.pdfH,
+    };
+  }
+
+  const onResizeMove = useCallback((e) => {
+    if (!resizeRef.current) return;
+    e.preventDefault();
+    const { index, startMouseX, startMouseY, startPdfW, startPdfH } = resizeRef.current;
+    const dx = (e.clientX - startMouseX) / scale;
+    const dy = (e.clientY - startMouseY) / scale;
+    setRects(prev => prev.map((r, i) => {
+      if (i !== index) return r;
+      return {
+        ...r,
+        pdfW: Math.max(60, startPdfW + dx),
+        pdfH: Math.max(30, startPdfH + dy),
+      };
+    }));
+  }, [scale]);
+
+  const onResizeUp = useCallback(() => {
+    resizeRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("mousemove", onResizeMove);
+    window.addEventListener("mouseup", onResizeUp);
+    return () => {
+      window.removeEventListener("mousemove", onResizeMove);
+      window.removeEventListener("mouseup", onResizeUp);
+    };
+  }, [onResizeMove, onResizeUp]);
+
   async function prepareVisual() {
-    if (!currentPdfBlob || rects.length === 0) {
-      alert("Kliknite do dokumentu kde chcete umiestniť podpis.");
+    if (!currentPdfBlob || (rects.length === 0 && !autoLastPage)) {
+      alert("Kliknite do dokumentu kde chcete umiestniť podpis, alebo zaškrtnite automaticky na poslednú stranu.");
       return;
     }
     setIsPreparing(true);
-
     try {
       const form = new FormData();
       form.append("file", new File([currentPdfBlob], currentPdfName, { type: "application/pdf" }));
@@ -70,22 +189,30 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
       if (autoLastPage && pdfDoc) {
         const lastPage = pdfDoc.numPages;
         const page = await pdfDoc.getPage(lastPage);
-        const vp = page.getViewport({ scale });
-        targetRects = [...rects, {
-          x: vp.width - 220, y: vp.height - 100,
-          w: 200, h: 80, page: lastPage
+        const vp = page.getViewport({ scale: 1 });
+        targetRects = [...targetRects, {
+          pdfX: vp.width - 220,
+          pdfY: vp.height - 100,
+          pdfW: 200,
+          pdfH: 80,
+          page: lastPage,
         }];
+      }
+
+      if (targetRects.length === 0) {
+        alert("Kliknite do dokumentu kde chcete umiestniť podpis, alebo zaškrtnite automaticky na poslednú stranu.");
+        return;
       }
 
       const signatures = await Promise.all(targetRects.map(async (r) => {
         const page = await pdfDoc.getPage(r.page);
-        const viewport = page.getViewport({ scale });
+        const viewport = page.getViewport({ scale: 1 });
         return {
           page: r.page - 1,
-          x: r.x / scale,
-          y: (viewport.height - (r.y + r.h)) / scale,
-          w: r.w / scale,
-          h: r.h / scale,
+          x: r.pdfX,
+          y: (viewport.height - (r.pdfY + r.pdfH)),
+          w: r.pdfW,
+          h: r.pdfH,
         };
       }));
 
@@ -111,7 +238,6 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
       setRects([]);
       setPreparedOk(true);
 
-      // reload preview
       const data = await blob.arrayBuffer();
       const newPdf = await pdfjsLib.getDocument({ data }).promise;
       setPdfDoc(newPdf);
@@ -121,7 +247,7 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
     }
   }
 
-  const sigTypeBtn = (val, label) => (
+  const sigTypeBtn = (val, icon, label) => (
     <button
       onClick={() => setSigType(val)}
       style={{
@@ -131,9 +257,13 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
         color: sigType === val ? "#2563eb" : "#374151",
         fontFamily: "'DM Sans', sans-serif", fontSize: 13,
         fontWeight: sigType === val ? 700 : 500,
-        cursor: "pointer", transition: "all 0.15s"
+        cursor: "pointer", transition: "all 0.15s",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
       }}
-    >{label}</button>
+    >
+      {icon}
+      {label}
+    </button>
   );
 
   return (
@@ -143,16 +273,17 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           display: grid;
           grid-template-columns: 1fr 300px;
           gap: 20px;
-          max-width: 1100px;
           margin: 28px auto;
           padding: 0 20px;
           align-items: start;
+          box-sizing: border-box;
         }
         .preview-card {
           background: #fff;
           border-radius: 16px;
           box-shadow: 0 1px 4px rgba(0,0,0,0.07);
           overflow: hidden;
+          min-width: 0;
         }
         .preview-toolbar {
           display: flex;
@@ -174,6 +305,7 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           border: 1px solid #e8eaf0;
           border-radius: 6px;
           background: #fff;
+          color: #374151;
           cursor: pointer;
           display: flex; align-items: center; justify-content: center;
           font-size: 14px;
@@ -181,17 +313,59 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
         }
         .icon-btn:hover:not(:disabled) { background: #f3f4f6; }
         .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .canvas-wrap {
-          padding: 16px;
-          display: flex;
-          justify-content: center;
-          background: #f3f4f6;
+        .canvas-scroll {
           overflow: auto;
           max-height: 70vh;
+          background: #f3f4f6;
+          padding: 16px;
         }
         .canvas-inner {
           position: relative;
           display: inline-block;
+        }
+        .sig-rect {
+          position: absolute;
+          border: 2px dashed #2563eb;
+          background: rgba(37,99,235,0.08);
+          border-radius: 6px;
+          box-sizing: border-box;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 12px;
+          color: #2563eb;
+          font-weight: 600;
+          cursor: grab;
+          user-select: none;
+          gap: 5px;
+        }
+        .sig-rect:active { cursor: grabbing; }
+        .sig-rect-label {
+          pointer-events: none;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .sig-rect-delete {
+          position: absolute;
+          top: 4px;
+          right: 6px;
+          cursor: pointer;
+          color: #ef4444;
+          line-height: 1;
+          display: flex;
+          align-items: center;
+        }
+        .sig-rect-resize {
+          position: absolute;
+          bottom: 2px;
+          right: 2px;
+          cursor: se-resize;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #2563eb;
         }
         .preview-hint {
           text-align: center;
@@ -223,10 +397,7 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           letter-spacing: 0.05em;
           margin: 16px 0 8px;
         }
-        .type-row {
-          display: flex;
-          gap: 8px;
-        }
+        .type-row { display: flex; gap: 8px; }
         .sig-input {
           width: 100%;
           padding: 9px 12px;
@@ -236,6 +407,7 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           font-size: 14px;
           outline: none;
           box-sizing: border-box;
+          background: #fff;
         }
         .sig-input:focus { border-color: #2563eb; }
         .select-input {
@@ -310,11 +482,14 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           font-family: 'DM Sans', sans-serif;
           font-size: 13px;
           color: #16a34a;
+          display: flex;
+          align-items: center;
+          gap: 8px;
         }
       `}</style>
 
       <div className="step2-layout">
-        {/* Ľavá časť – náhľad PDF */}
+        {/* Left – PDF preview */}
         <div className="preview-card">
           <div className="preview-toolbar">
             <div className="preview-toolbar-left">
@@ -331,37 +506,50 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
             </div>
           </div>
 
-          <div className="canvas-wrap">
-            <div className="canvas-inner">
+          <div className="canvas-scroll">
+            <div className="canvas-inner" ref={overlayRef}>
               <canvas
                 ref={canvasRef}
                 onClick={onCanvasClick}
                 style={{ display: "block", cursor: "crosshair" }}
               />
-              {rects.filter(r => r.page === pageNum).map((r, i) => (
-                <Rnd
-                  key={i}
-                  bounds="parent"
-                  size={{ width: r.w, height: r.h }}
-                  position={{ x: r.x, y: r.y }}
-                  onDragStop={(e, d) => setRects(prev => prev.map((item, idx) => idx === i ? { ...item, x: d.x, y: d.y } : item))}
-                  onResizeStop={(e, dir, ref, delta, pos) => setRects(prev => prev.map((item, idx) => idx === i ? { ...item, x: pos.x, y: pos.y, w: ref.offsetWidth, h: ref.offsetHeight } : item))}
-                  style={{
-                    border: "2px dashed #2563eb",
-                    background: "rgba(37,99,235,0.08)",
-                    borderRadius: 6,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 12, fontFamily: "'DM Sans', sans-serif",
-                    color: "#2563eb", fontWeight: 600,
-                  }}
-                >
-                  ✍ Podpis
-                  <span
-                    onClick={(e) => { e.stopPropagation(); setRects(prev => prev.filter((_, idx) => idx !== i)); }}
-                    style={{ position: "absolute", top: 2, right: 6, cursor: "pointer", fontSize: 14, color: "#ef4444" }}
-                  >✕</span>
-                </Rnd>
-              ))}
+
+              {rects.map((r, globalIndex) => {
+                if (r.page !== pageNum) return null;
+                return (
+                  <div
+                    key={globalIndex}
+                    className="sig-rect"
+                    style={{
+                      left: r.pdfX * scale,
+                      top: r.pdfY * scale,
+                      width: r.pdfW * scale,
+                      height: r.pdfH * scale,
+                    }}
+                    onMouseDown={(e) => startDrag(e, globalIndex)}
+                  >
+                    <span className="sig-rect-label">
+                      <PenLine size={13} /> Podpis
+                    </span>
+                    <span
+                      className="sig-rect-delete"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRects(prev => prev.filter((_, idx) => idx !== globalIndex));
+                      }}
+                    >
+                      <X size={14} />
+                    </span>
+                    <span
+                      className="sig-rect-resize"
+                      onMouseDown={(e) => startResize(e, globalIndex)}
+                    >
+                      <Maximize2 size={12} />
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -372,14 +560,14 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           </div>
         </div>
 
-        {/* Pravý panel */}
+        {/* Right panel */}
         <div className="panel-card">
           <h3>Vizuálny podpis</h3>
 
           <div className="type-row">
-            {sigTypeBtn("sketch", "✍ Napísať")}
-            {sigTypeBtn("image", "⬆ Nahrať")}
-            {sigTypeBtn("text", "T Text")}
+            {sigTypeBtn("sketch", <PenLine size={14} />, "Napísať")}
+            {sigTypeBtn("image", <Upload size={14} />, "Nahrať")}
+            {sigTypeBtn("text", <Type size={14} />, "Text")}
           </div>
 
           <div style={{ marginTop: 14 }}>
@@ -426,26 +614,25 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           </label>
 
           <div className="info-banner">
-            ℹ️ Vizuálny podpis sa vloží pred elektronickým podpisom (PAdES).
+            <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            Vizuálny podpis sa vloží pred elektronickým podpisom (PAdES).
           </div>
 
           <button
             className="btn-primary"
-            disabled={isPreparing || rects.length === 0}
+            disabled={isPreparing || (rects.length === 0 && !autoLastPage)}
             onClick={prepareVisual}
           >
             {isPreparing ? "Vkladám..." : "Vložiť vizuálny podpis"}
           </button>
 
           {preparedOk && (
-            <div className="success-banner">✅ Vizuálny podpis bol vložený</div>
+            <div className="success-banner">
+              <CheckCircle size={15} /> Vizuálny podpis bol vložený
+            </div>
           )}
 
-          <button
-            className="btn-secondary"
-            disabled={!preparedOk}
-            onClick={onNext}
-          >
+          <button className="btn-secondary" onClick={onNext}>
             Pokračovať na elektronický podpis
           </button>
           <button className="btn-secondary" onClick={onBack}>
