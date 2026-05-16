@@ -83,6 +83,7 @@ async def prepare_visual_multi(
     image: Optional[UploadFile] = File(None),
     signatures: str = Form(...),  # JSON string
     text: Optional[str] = Form(None),
+    font_name: Optional[str] = Form(None),
 ):
     pdf_bytes = await file.read()
 
@@ -111,6 +112,7 @@ async def prepare_visual_multi(
             h=sig["h"],
             text=text,
             image_bytes=image_bytes,
+            font_name=font_name,
         )
 
     return Response(

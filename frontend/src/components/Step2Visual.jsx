@@ -2,9 +2,15 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
 import SignatureCanvas from "./SignatureCanvas";
-import { PenLine, Upload, Type, X, Maximize2, Info, CheckCircle } from "lucide-react";
+import { PenLine, Upload, Type, X, Maximize2, Info, CheckCircle, ChevronDown } from "lucide-react";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+const FONT_FAMILIES = {
+  DejaVu: "sans-serif",
+  DancingScript: "'DancingScript', cursive",
+  Caveat: "'Caveat', cursive"
+}
 
 export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, setCurrentPdfBlob, currentPdfName, setCurrentPdfName, onNext, onBack }) {
   const canvasRef = useRef(null);
@@ -18,6 +24,8 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
   const [rects, setRects] = useState([]);
   const [sigType, setSigType] = useState("sketch");
   const [sigText, setSigText] = useState("Meno Priezvisko");
+  const [sigFont, setSignFont] = useState("DejaVu")
+  const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
   const [sigImage, setSigImage] = useState(null);
   const [autoLastPage, setAutoLastPage] = useState(false);
 
@@ -218,6 +226,7 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
 
       form.append("signatures", JSON.stringify(signatures));
       form.append("text", sigType === "text" ? sigText : "");
+      form.append("font_name", sigFont);
       if ((sigType === "image" || sigType === "sketch") && sigImage) {
         form.append("image", sigImage);
       }
@@ -583,12 +592,71 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
               />
             )}
             {sigType === "text" && (
+              <>
               <input
                 className="sig-input"
                 value={sigText}
                 onChange={(e) => setSigText(e.target.value)}
                 placeholder="Meno Priezvisko"
               />
+              <div style={{ position: "relative", marginTop: 8 }}>
+  <div
+    onClick={() => setFontDropdownOpen(o => !o)}
+    style={{
+      padding: "9px 12px",
+      border: "1px solid #e8eaf0",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontFamily: FONT_FAMILIES[sigFont],
+      fontSize: 14,
+      background: "#fff",
+      userSelect: "none",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      color: "#374151",
+    }}
+  >
+    {sigFont === "DejaVu" ? "DejaVu Sans" : sigFont === "DancingScript" ? "Dancing Script" : "Caveat"}
+    <ChevronDown size={14} />
+  </div>
+
+  {fontDropdownOpen && (
+    <div style={{
+      position: "absolute",
+      top: "calc(100% + 4px)",
+      left: 0, right: 0,
+      background: "#fff",
+      border: "1px solid #e8eaf0",
+      borderRadius: 8,
+      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+      zIndex: 100,
+      overflow: "hidden",
+    }}>
+      {[
+        { value: "DejaVu",        label: "DejaVu Sans" },
+        { value: "DancingScript", label: "Dancing Script" },
+        { value: "Caveat",        label: "Caveat" },
+      ].map(f => (
+        <div
+          key={f.value}
+          onClick={() => { setSignFont(f.value); setFontDropdownOpen(false); }}
+          style={{
+            padding: "10px 14px",
+            fontFamily: FONT_FAMILIES[f.value],
+            fontSize: 15,
+            cursor: "pointer",
+            background: sigFont === f.value ? "#eff6ff" : "#fff",
+            color: sigFont === f.value ? "#2563eb" : "#374151",
+          }}
+        >
+          {f.label}
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+</>
             )}
           </div>
 

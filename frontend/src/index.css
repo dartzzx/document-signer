@@ -1,3 +1,13 @@
+@font-face {
+  font-family: 'DancingScript';
+  src: url('/fonts/DancingScript-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Caveat';
+  src: url('/fonts/Caveat-Regular.ttf') format('truetype');
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
