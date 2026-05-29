@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Form
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
+import urllib.parse
 
 from typing import Optional
 
@@ -34,6 +35,13 @@ app.add_middleware(
     expose_headers=["X-Signed-By", "X-Issued-By"],
 )
 
+
+def content_disposition(filename: str) -> str:
+    """Vráti správne enkódovaný Content-Disposition header podporujúci diakritiku (RFC 5987)."""
+    encoded = urllib.parse.quote(filename)
+    return f"attachment; filename*=UTF-8''{encoded}"
+
+
 @app.get("/")
 def root():
     return {"message": "Backend beží"}
@@ -41,9 +49,9 @@ def root():
 
 @app.post("/prepare-visual")
 async def prepare_visual(
-    file: UploadFile = File(...),
-    image: Optional[UploadFile] = File(None), # volitelny parameter pre obrazok/sken podpisu
-    params: VisualSignatureParams = Depends(VisualSignatureParams.as_form)
+        file: UploadFile = File(...),
+        image: Optional[UploadFile] = File(None),  # volitelny parameter pre obrazok/sken podpisu
+        params: VisualSignatureParams = Depends(VisualSignatureParams.as_form)
 ):
     pdf_bytes = await file.read()
 
@@ -74,16 +82,17 @@ async def prepare_visual(
     return Response(
         content=prepared,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="prepared_{file.filename}"'}
+        headers={"Content-Disposition": content_disposition(f"prepared_{file.filename}")}
     )
+
 
 @app.post("/prepare-visual-multi")
 async def prepare_visual_multi(
-    file: UploadFile = File(...),
-    image: Optional[UploadFile] = File(None),
-    signatures: str = Form(...),  # JSON string
-    text: Optional[str] = Form(None),
-    font_name: Optional[str] = Form(None),
+        file: UploadFile = File(...),
+        image: Optional[UploadFile] = File(None),
+        signatures: str = Form(...),  # JSON string
+        text: Optional[str] = Form(None),
+        font_name: Optional[str] = Form(None),
 ):
     pdf_bytes = await file.read()
 
@@ -118,8 +127,9 @@ async def prepare_visual_multi(
     return Response(
         content=current_pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="prepared_{file.filename}"'}
+        headers={"Content-Disposition": content_disposition(f"prepared_{file.filename}")}
     )
+
 
 @app.post("/sign")
 async def sign_document(file: UploadFile = File(...), level: str = Form("PAdES_BASELINE_B")):
@@ -139,13 +149,15 @@ async def sign_document(file: UploadFile = File(...), level: str = Form("PAdES_B
         raise HTTPException(status_code=500, detail=str(e))
 
     if status == "signed":
+        signed_by = result.get("signedBy", "")
+        issued_by = result.get("issuedBy", "")
         return Response(
             content=result["content"],
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'attachment; filename="signed_{file.filename}"',
-                "X-Signed-By": result.get("signedBy", ""),
-                "X-Issued-By": result.get("issuedBy", "")
+                "Content-Disposition": content_disposition(f"signed_{file.filename}"),
+                "X-Signed-By": urllib.parse.quote(signed_by),
+                "X-Issued-By": urllib.parse.quote(issued_by),
             }
         )
 
@@ -153,8 +165,8 @@ async def sign_document(file: UploadFile = File(...), level: str = Form("PAdES_B
         return {"signed": False, "message": "Podpis zrušený"}
 
     raise HTTPException(
-        status_code = result.get("status_code", 503),
-        detail = result.get("message", "Chyba pri podpisovaní")
+        status_code=result.get("status_code", 503),
+        detail=result.get("message", "Chyba pri podpisovaní")
     )
 
 
@@ -167,6 +179,7 @@ def load_trust_roots():
                 _, _, der_bytes = pem.unarmor(cert_data)
                 certs.append(x509.Certificate.load(der_bytes))
     return certs
+
 
 def run_verify(pdf_bytes: bytes):
     reader = PdfFileReader(BytesIO(pdf_bytes), strict=False)
@@ -197,6 +210,7 @@ def run_verify(pdf_bytes: bytes):
             results.append({"valid": False, "error": str(e)})
 
     return results
+
 
 @app.post("/verify")
 async def verify_signatures(file: UploadFile = File(...)):

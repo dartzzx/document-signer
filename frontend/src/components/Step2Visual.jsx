@@ -20,7 +20,6 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
   const [scale, setScale] = useState(1.5);
   const [isRendering, setIsRendering] = useState(false);
 
-  // rects stored in PDF coordinates (scale=1)
   const [rects, setRects] = useState([]);
   const [sigType, setSigType] = useState("sketch");
   const [sigText, setSigText] = useState("Meno Priezvisko");
@@ -33,8 +32,6 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
   const [preparedOk, setPreparedOk] = useState(false);
 
   const renderTaskRef = useRef(null);
-
-  // Drag state (refs to avoid re-renders during drag)
   const dragRef = useRef(null);
 
   async function renderPage() {
@@ -77,12 +74,27 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
   function onCanvasClick(e) {
     if (!pdfDoc || isPreparing) return;
     if (dragRef.current) return;
+
     const { x, y } = mouseToPdf(e);
     const pdfW = 180;
     const pdfH = 70;
+
+    // vypocet max sirky
+    const canvas = canvasRef.current;
+    const canvasPdfW = canvas ? canvas.width / scale : 9999;
+    const canvasPdfH = canvas ? canvas.height / scale : 9999;
+
+    // zaciatocne suradnice boxu
+    let newX = x - pdfW / 2;
+    let newY = y - pdfH / 2;
+
+    // osetrene pretecenie k rohom dokumentu
+    newX = Math.max(0, Math.min(newX, canvasPdfW - pdfW));
+    newY = Math.max(0, Math.min(newY, canvasPdfH - pdfH));
+
     setRects(prev => [...prev, {
-      pdfX: Math.max(0, x - pdfW / 2),
-      pdfY: Math.max(0, y - pdfH / 2),
+      pdfX: newX,
+      pdfY: newY,
       pdfW,
       pdfH,
       page: pageNum,
@@ -110,14 +122,12 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
     const { x, y } = mouseToPdf(e);
     const dx = x - startMousePdfX;
     const dy = y - startMousePdfY;
-
     const canvas = canvasRef.current;
     let canvasPdfW = 9999, canvasPdfH = 9999;
     if (canvas) {
       canvasPdfW = canvas.width / scale;
       canvasPdfH = canvas.height / scale;
     }
-
     setRects(prev => prev.map((r, i) => {
       if (i !== index) return r;
       const newX = Math.max(0, Math.min(startRectPdfX + dx, canvasPdfW - r.pdfW));
@@ -126,9 +136,7 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
     }));
   }, [scale]);
 
-  const onMouseUp = useCallback(() => {
-    dragRef.current = null;
-  }, []);
+  const onMouseUp = useCallback(() => { dragRef.current = null; }, []);
 
   useEffect(() => {
     window.addEventListener("mousemove", onMouseMove);
@@ -162,17 +170,11 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
     const dy = (e.clientY - startMouseY) / scale;
     setRects(prev => prev.map((r, i) => {
       if (i !== index) return r;
-      return {
-        ...r,
-        pdfW: Math.max(60, startPdfW + dx),
-        pdfH: Math.max(30, startPdfH + dy),
-      };
+      return { ...r, pdfW: Math.max(60, startPdfW + dx), pdfH: Math.max(30, startPdfH + dy) };
     }));
   }, [scale]);
 
-  const onResizeUp = useCallback(() => {
-    resizeRef.current = null;
-  }, []);
+  const onResizeUp = useCallback(() => { resizeRef.current = null; }, []);
 
   useEffect(() => {
     window.addEventListener("mousemove", onResizeMove);
@@ -192,7 +194,6 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
     try {
       const form = new FormData();
       form.append("file", new File([currentPdfBlob], currentPdfName, { type: "application/pdf" }));
-
       let targetRects = [...rects];
       if (autoLastPage && pdfDoc) {
         const lastPage = pdfDoc.numPages;
@@ -206,12 +207,10 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           page: lastPage,
         }];
       }
-
       if (targetRects.length === 0) {
         alert("Kliknite do dokumentu kde chcete umiestniť podpis, alebo zaškrtnite automaticky na poslednú stranu.");
         return;
       }
-
       const signatures = await Promise.all(targetRects.map(async (r) => {
         const page = await pdfDoc.getPage(r.page);
         const viewport = page.getViewport({ scale: 1 });
@@ -223,34 +222,28 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           h: r.pdfH,
         };
       }));
-
       form.append("signatures", JSON.stringify(signatures));
       form.append("text", sigType === "text" ? sigText : "");
       form.append("font_name", sigFont);
       if ((sigType === "image" || sigType === "sketch") && sigImage) {
         form.append("image", sigImage);
       }
-
       const res = await fetch("http://127.0.0.1:8000/prepare-visual-multi", {
         method: "POST",
         body: form,
       });
-
       if (!res.ok) {
         alert("Chyba: " + await res.text());
         return;
       }
-
       const blob = await res.blob();
       setCurrentPdfBlob(blob);
       setCurrentPdfName(`prepared_${currentPdfName}`);
       setRects([]);
       setPreparedOk(true);
-
       const data = await blob.arrayBuffer();
       const newPdf = await pdfjsLib.getDocument({ data }).promise;
       setPdfDoc(newPdf);
-      setPageNum(1);
     } finally {
       setIsPreparing(false);
     }
@@ -270,28 +263,29 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
         display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
       }}
     >
-      {icon}
-      {label}
+      {icon}{label}
     </button>
   );
 
   return (
     <>
       <style>{`
+        canvas {
+          cursor: crosshair !important;
+        }
         .step2-layout {
           display: grid;
           grid-template-columns: 1fr 300px;
-          gap: 20px;
-          margin: 28px auto;
-          padding: 0 20px;
-          align-items: start;
-          box-sizing: border-box;
+          gap: 0;
+          height: calc(100vh - 56px - 80px);
+          overflow: hidden;
         }
         .preview-card {
           background: #fff;
-          border-radius: 16px;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+          border-right: 1px solid #e8eaf0;
           overflow: hidden;
+          display: flex;
+          flex-direction: column;
           min-width: 0;
         }
         .preview-toolbar {
@@ -300,6 +294,7 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           justify-content: space-between;
           padding: 12px 20px;
           border-bottom: 1px solid #e8eaf0;
+          flex-shrink: 0;
         }
         .preview-toolbar-left {
           display: flex;
@@ -324,9 +319,12 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
         .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .canvas-scroll {
           overflow: auto;
-          max-height: 70vh;
+          flex: 1;
           background: #f3f4f6;
           padding: 16px;
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
         }
         .canvas-inner {
           position: relative;
@@ -358,8 +356,7 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
         }
         .sig-rect-delete {
           position: absolute;
-          top: 4px;
-          right: 6px;
+          top: 4px; right: 6px;
           cursor: pointer;
           color: #ef4444;
           line-height: 1;
@@ -368,8 +365,7 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
         }
         .sig-rect-resize {
           position: absolute;
-          bottom: 2px;
-          right: 2px;
+          bottom: 2px; right: 2px;
           cursor: se-resize;
           display: flex;
           align-items: center;
@@ -383,12 +379,15 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           font-size: 12px;
           color: #9aa0b0;
           border-top: 1px solid #e8eaf0;
+          flex-shrink: 0;
         }
         .panel-card {
           background: #fff;
-          border-radius: 16px;
           padding: 24px;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+          overflow-y: auto;
+          height: 100%;
+          box-sizing: border-box;
+          border-left: 1px solid #e8eaf0;
         }
         .panel-card h3 {
           font-family: 'DM Sans', sans-serif;
@@ -498,7 +497,6 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
       `}</style>
 
       <div className="step2-layout">
-        {/* Left – PDF preview */}
         <div className="preview-card">
           <div className="preview-toolbar">
             <div className="preview-toolbar-left">
@@ -522,7 +520,6 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
                 onClick={onCanvasClick}
                 style={{ display: "block", cursor: "crosshair" }}
               />
-
               {rects.map((r, globalIndex) => {
                 if (r.page !== pageNum) return null;
                 return (
@@ -569,7 +566,6 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
           </div>
         </div>
 
-        {/* Right panel */}
         <div className="panel-card">
           <h3>Vizuálny podpis</h3>
 
@@ -593,70 +589,69 @@ export default function Step2Visual({ file, pdfDoc, setPdfDoc, currentPdfBlob, s
             )}
             {sigType === "text" && (
               <>
-              <input
-                className="sig-input"
-                value={sigText}
-                onChange={(e) => setSigText(e.target.value)}
-                placeholder="Meno Priezvisko"
-              />
-              <div style={{ position: "relative", marginTop: 8 }}>
-  <div
-    onClick={() => setFontDropdownOpen(o => !o)}
-    style={{
-      padding: "9px 12px",
-      border: "1px solid #e8eaf0",
-      borderRadius: 8,
-      cursor: "pointer",
-      fontFamily: FONT_FAMILIES[sigFont],
-      fontSize: 14,
-      background: "#fff",
-      userSelect: "none",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      color: "#374151",
-    }}
-  >
-    {sigFont === "DejaVu" ? "DejaVu Sans" : sigFont === "DancingScript" ? "Dancing Script" : "Caveat"}
-    <ChevronDown size={14} />
-  </div>
-
-  {fontDropdownOpen && (
-    <div style={{
-      position: "absolute",
-      top: "calc(100% + 4px)",
-      left: 0, right: 0,
-      background: "#fff",
-      border: "1px solid #e8eaf0",
-      borderRadius: 8,
-      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-      zIndex: 100,
-      overflow: "hidden",
-    }}>
-      {[
-        { value: "DejaVu",        label: "DejaVu Sans" },
-        { value: "DancingScript", label: "Dancing Script" },
-        { value: "Caveat",        label: "Caveat" },
-      ].map(f => (
-        <div
-          key={f.value}
-          onClick={() => { setSignFont(f.value); setFontDropdownOpen(false); }}
-          style={{
-            padding: "10px 14px",
-            fontFamily: FONT_FAMILIES[f.value],
-            fontSize: 15,
-            cursor: "pointer",
-            background: sigFont === f.value ? "#eff6ff" : "#fff",
-            color: sigFont === f.value ? "#2563eb" : "#374151",
-          }}
-        >
-          {f.label}
-        </div>
-      ))}
-    </div>
-  )}
-</div>
-</>
+                <input
+                  className="sig-input"
+                  value={sigText}
+                  onChange={(e) => setSigText(e.target.value)}
+                  placeholder="Meno Priezvisko"
+                />
+                <div style={{ position: "relative", marginTop: 8 }}>
+                  <div
+                    onClick={() => setFontDropdownOpen(o => !o)}
+                    style={{
+                      padding: "9px 12px",
+                      border: "1px solid #e8eaf0",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      fontFamily: FONT_FAMILIES[sigFont],
+                      fontSize: 14,
+                      background: "#fff",
+                      userSelect: "none",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      color: "#374151",
+                    }}
+                  >
+                    {sigFont === "DejaVu" ? "DejaVu Sans" : sigFont === "DancingScript" ? "Dancing Script" : "Caveat"}
+                    <ChevronDown size={14} />
+                  </div>
+                  {fontDropdownOpen && (
+                    <div style={{
+                      position: "absolute",
+                      top: "calc(100% + 4px)",
+                      left: 0, right: 0,
+                      background: "#fff",
+                      border: "1px solid #e8eaf0",
+                      borderRadius: 8,
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                      zIndex: 100,
+                      overflow: "hidden",
+                    }}>
+                      {[
+                        { value: "DejaVu", label: "DejaVu Sans" },
+                        { value: "DancingScript", label: "Dancing Script" },
+                        { value: "Caveat", label: "Caveat" },
+                      ].map(f => (
+                        <div
+                          key={f.value}
+                          onClick={() => { setSignFont(f.value); setFontDropdownOpen(false); }}
+                          style={{
+                            padding: "10px 14px",
+                            fontFamily: FONT_FAMILIES[f.value],
+                            fontSize: 15,
+                            cursor: "pointer",
+                            background: sigFont === f.value ? "#eff6ff" : "#fff",
+                            color: sigFont === f.value ? "#2563eb" : "#374151",
+                          }}
+                        >
+                          {f.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
 

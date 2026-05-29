@@ -14,6 +14,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 export default function App() {
   const [step, setStep] = useState(1);
   const [showVerify, setShowVerify] = useState(false);
+  const [isSigned, setIsSigned] = useState(false);
 
   const [file, setFile] = useState(null);
   const [pdfDoc, setPdfDoc] = useState(null);
@@ -24,10 +25,20 @@ export default function App() {
     setFile(f);
     setCurrentPdfBlob(f);
     setCurrentPdfName(f.name);
+    setIsSigned(false);
     const data = await f.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data }).promise;
     setPdfDoc(pdf);
     setStep(2);
+  }
+
+  function handleResetToUpload() {
+    setStep(1);
+    setIsSigned(false);
+    setFile(null);
+    setPdfDoc(null);
+    setCurrentPdfBlob(null);
+    setCurrentPdfName("document.pdf");
   }
 
   return (
@@ -101,12 +112,17 @@ export default function App() {
       <div className="app-header">
         <div className="app-logo">
           <PenLine size={18} color="#2563eb" />
-          PodpisApp
+          PodpiSigned
         </div>
         <div className="header-nav">
           <button
             className={`nav-btn ${!showVerify ? "active" : "ghost"}`}
-            onClick={() => setShowVerify(false)}
+            onClick={() => {
+              setShowVerify(false);
+              if (isSigned) {
+                handleResetToUpload();
+              }
+            }}
           >
             <PenLine size={14} />
             Podpísať dokument
@@ -125,7 +141,8 @@ export default function App() {
         <VerifyPage />
       ) : (
         <>
-          <StepIndicator currentStep={step} />
+          <StepIndicator currentStep={step} isSigned={isSigned} />
+
           {step === 1 && <Step1Upload onFileLoaded={handleFileLoaded} />}
           {step === 2 && (
             <Step2Visual
@@ -142,13 +159,15 @@ export default function App() {
           )}
           {step === 3 && (
             <Step3Sign
-              currentPdfBlob={currentPdfBlob}
-              currentPdfName={currentPdfName}
-              setCurrentPdfBlob={setCurrentPdfBlob}
-              setCurrentPdfName={setCurrentPdfName}
-              onBack={() => setStep(2)}
-            />
-          )}
+                currentPdfBlob={currentPdfBlob}
+                currentPdfName={currentPdfName}
+                setCurrentPdfBlob={setCurrentPdfBlob}
+                setCurrentPdfName={setCurrentPdfName}
+                onBack={() => setStep(2)}
+                onSignSuccess={() => setIsSigned(true)}
+                onReset={handleResetToUpload}
+  />
+)}
         </>
       )}
     </>

@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { CheckCircle, AlertTriangle, Download, Info } from "lucide-react";
+import { CheckCircle, AlertTriangle, Download, Info, RotateCcw } from "lucide-react";
 
 function parseSignedBy(dn) {
   if (!dn) return "Neznáme";
+  try { dn = decodeURIComponent(dn); } catch(e) {}
   const obj = {};
   dn.split(",").forEach(p => {
     const [k, v] = p.split("=");
@@ -13,6 +14,7 @@ function parseSignedBy(dn) {
 
 function parseIssuer(dn) {
   if (!dn) return "Neznáme";
+  try { dn = decodeURIComponent(dn); } catch(e) {}
   const obj = {};
   dn.split(",").forEach(p => {
     const [k, v] = p.split("=");
@@ -21,7 +23,7 @@ function parseIssuer(dn) {
   return obj.O || obj.CN || dn;
 }
 
-export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPdfBlob, setCurrentPdfName, onBack }) {
+export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPdfBlob, setCurrentPdfName, onBack, onSignSuccess, onReset }) {
   const [padesLevel, setPadesLevel] = useState("PAdES_BASELINE_B");
   const [isSigning, setIsSigning] = useState(false);
   const [signedPdfUrl, setSignedPdfUrl] = useState(null);
@@ -57,12 +59,22 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
         setSignedPdfUrl(url);
         setCurrentPdfBlob(blob);
         setCurrentPdfName(`signed_${currentPdfName}`);
+
+        let rawSignedBy = res.headers.get("X-Signed-By") || "";
+        let rawIssuedBy = res.headers.get("X-Issued-By") || "";
+        try { rawSignedBy = decodeURIComponent(rawSignedBy); } catch(e) {}
+
         setSignatureInfo({
-          signedBy: res.headers.get("X-Signed-By"),
-          issuedBy: res.headers.get("X-Issued-By"),
+          signedBy: rawSignedBy,
+          issuedBy: rawIssuedBy,
           signedAt: new Date().toLocaleString(),
           profile: padesLevel === "PAdES_BASELINE_T" ? "PAdES-T" : "PAdES-B",
         });
+
+        if (onSignSuccess) {
+          onSignSuccess();
+        }
+
       } else {
         const data = await res.json();
         setError(data.message || "Podpisovanie zlyhalo.");
@@ -78,18 +90,20 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
     <>
       <style>{`
         .step3-layout {
-          max-width: 700px;
-          margin: 40px auto;
-          padding: 0 24px;
+          max-width: 860px;
+          margin: 0 auto;
+          padding: 40px 24px;
           display: grid;
           grid-template-columns: 1fr 260px;
           gap: 20px;
           align-items: start;
+          min-height: calc(100vh - 56px - 80px);
+          box-sizing: border-box;
         }
         .sign-card {
           background: #fff;
           border-radius: 16px;
-          padding: 32px;
+          padding: 40px;
           box-shadow: 0 1px 4px rgba(0,0,0,0.07);
         }
         .sign-card h2 {
@@ -107,8 +121,8 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
         }
         .pades-row {
           display: flex;
-          align-items: center;
-          gap: 12px;
+          flex-direction: column;
+          gap: 8px;
           margin-bottom: 24px;
         }
         .pades-label {
@@ -116,15 +130,15 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
           font-size: 13px;
           font-weight: 600;
           color: #374151;
-          white-space: nowrap;
         }
         .pades-select {
-          padding: 8px 12px;
+          padding: 10px 12px;
           border: 1px solid #e8eaf0;
           border-radius: 8px;
           font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
+          font-size: 14px;
           background: #fff;
+          width: 100%;
         }
         .sign-btn {
           width: 100%;
@@ -138,7 +152,6 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
           font-weight: 700;
           cursor: pointer;
           transition: background 0.2s;
-          letter-spacing: 0.01em;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -200,7 +213,6 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          margin-top: 14px;
           padding: 10px 20px;
           background: #16a34a;
           color: #fff;
@@ -209,7 +221,31 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
           font-family: 'DM Sans', sans-serif;
           font-size: 13px;
           font-weight: 600;
+          transition: background 0.15s;
         }
+        .download-btn:hover { background: #15803d; }
+
+        .reset-action-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 10px 20px;
+          background: #fff;
+          color: #374151;
+          border: 1px solid #bbf7d0;
+          border-radius: 8px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .reset-action-btn:hover {
+          background: #f4fvh;
+          border-color: #86efac;
+          color: #111827;
+        }
+
         .helper-card {
           background: #fff;
           border-radius: 16px;
@@ -221,7 +257,7 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
           font-size: 14px;
           font-weight: 700;
           color: #111827;
-          margin: 0 0 10px;
+          margin: 0 0 14px;
           display: flex;
           align-items: center;
           gap: 6px;
@@ -229,8 +265,15 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
         .helper-card p {
           font-family: 'DM Sans', sans-serif;
           font-size: 13px;
+          color: #374151;
+          margin: 0 0 6px;
+        }
+        .helper-list {
+          margin: 0 0 16px 0;
+          padding-left: 20px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 12px;
           color: #6b7280;
-          margin: 0;
           line-height: 1.5;
         }
       `}</style>
@@ -240,28 +283,32 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
           <h2>Aplikovať elektronický podpis</h2>
           <p className="subtitle">Dokument bude podpísaný pomocou aplikácie Autogram a vašej eID karty.</p>
 
-          <div className="pades-row">
-            <span className="pades-label">Profil PAdES:</span>
-            <select
-              className="pades-select"
-              value={padesLevel}
-              onChange={(e) => setPadesLevel(e.target.value)}
-            >
-              <option value="PAdES_BASELINE_B">PAdES-B</option>
-              <option value="PAdES_BASELINE_T">PAdES-T</option>
-            </select>
-          </div>
+          {!signedPdfUrl && (
+            <div className="pades-row">
+              <span className="pades-label">Profil PAdES:</span>
+              <select
+                className="pades-select"
+                value={padesLevel}
+                onChange={(e) => setPadesLevel(e.target.value)}
+              >
+                <option value="PAdES_BASELINE_B">PAdES-B (Základný kvalifikovaný podpis)</option>
+                <option value="PAdES_BASELINE_T">PAdES-T (Podpis s nezávislou časovou pečiatkou)</option>
+              </select>
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#6b7280" }}>
+                Pre dlhodobú overiteľnosť dokumentu odporúčame zvoliť profil PAdES-T.
+              </span>
+            </div>
+          )}
 
-          <button className="sign-btn" disabled={isSigning || !!signedPdfUrl} onClick={signDocument}>
-            {signedPdfUrl
-              ? <><CheckCircle size={17} /> Dokument podpísaný</>
-              : isSigning
-                ? "Podpisujem... (čakajte na Autogram)"
-                : "Podpísať elektronicky dokument"
-            }
-          </button>
+          {!signedPdfUrl && (
+            <button className="sign-btn" disabled={isSigning} onClick={signDocument}>
+              {isSigning ? "Podpisujem... (skontrolujte Autogram)" : "Podpísať elektronicky dokument"}
+            </button>
+          )}
 
-          <button className="back-btn" onClick={onBack}>Späť</button>
+          {!signedPdfUrl && (
+            <button className="back-btn" disabled={isSigning} onClick={onBack}>Späť</button>
+          )}
 
           {error && (
             <div className="error-box">
@@ -278,27 +325,53 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
               <div className="sig-detail"><b>Profil:</b> {signatureInfo.profile}</div>
               <details style={{ marginTop: 8 }}>
                 <summary style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#6b7280", cursor: "pointer" }}>
-                  Detail certifikátu
+                  Zobraziť technický detail certifikátu
                 </summary>
-                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#9aa0b0", marginTop: 4 }}>
+                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#9aa0b0", marginTop: 4, wordBreak: "break-all" }}>
                   {signatureInfo.signedBy}
                 </div>
               </details>
+
               {signedPdfUrl && (
-                <a href={signedPdfUrl} download="signed.pdf" className="download-btn">
-                  <Download size={14} /> Stiahnuť podpísaný dokument
-                </a>
+                <div style={{ marginTop: 24, borderTop: "1px solid #bbf7d0", paddingTop: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <a href={signedPdfUrl} download="signed.pdf" className="download-btn">
+                    <Download size={15} /> Stiahnuť podpísaný dokument
+                  </a>
+
+                  <button onClick={onReset} className="reset-action-btn">
+                    <RotateCcw size={14} /> Podpísať ďalší dokument
+                  </button>
+                </div>
               )}
             </div>
           )}
         </div>
 
         <div className="helper-card">
-          <h3><Info size={15} /> Pomocník</h3>
-          <p>
-            Po kliknutí na tlačidlo sa otvorí aplikácia <b>Autogram</b>.
-            Vložte eID kartu do čítačky a potvrďte podpis PIN kódom.
-          </p>
+          <h3><Info size={16} /> {signedPdfUrl ? "Čo ďalej?" : "Pomocník pre podpisovanie"}</h3>
+
+          {signedPdfUrl ? (
+            <p style={{ color: "#6b7280", lineHeight: 1.5 }}>
+              Váš dokument bol úspešne podpísaný. Teraz si ho môžete stiahnuť do svojho zariadenia a odoslať prijímateľovi.
+              <br /><br />
+              Dokument obsahuje vložený kryptografický podpis, ktorý je možné kedykoľvek overiť.
+            </p>
+          ) : (
+            <>
+              <p><b>1. Pred kliknutím na tlačidlo:</b></p>
+              <ul className="helper-list">
+                <li>Vložte eID kartu do čítačky.</li>
+                <li>Uistite sa, že máte na pozadí <b>spustenú aplikáciu Autogram</b>.</li>
+              </ul>
+
+              <p><b>2. Priebeh podpisovania:</b></p>
+              <ul className="helper-list" style={{ marginBottom: 0 }}>
+                <li>Aplikácia vás vyzve na výber certifikátu.</li>
+                <li>Zadáte <b>BOK kód</b> (6 číslic).</li>
+                <li>Zadáte <b>Podpisový PIN</b> (6 číslic).</li>
+              </ul>
+            </>
+          )}
         </div>
       </div>
     </>

@@ -8,6 +8,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from fastapi import HTTPException
+from datetime import date
 
 FONTS_DIR = os.path.join(os.path.dirname(__file__), "..", "fonts")
 
@@ -72,6 +73,9 @@ def add_visual_signature(
         fsize = max(8.0, min(h * 0.2, 14.0))
         c.setFont(font, fsize)
         c.drawCentredString(x + w / 2, y + (h - fsize) / 2, text)
+
+    c.setFont("DejaVu", 7)
+    c.drawCentredString(x + w / 2, y - 10, date.today().strftime("%d.%m.%Y"))
 
     c.save()
     overlay_buf.seek(0)

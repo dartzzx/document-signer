@@ -1,4 +1,4 @@
-export default function StepIndicator({ currentStep }) {
+export default function StepIndicator({ currentStep, isSigned }) {
   const steps = [
     { number: 1, label: "Nahrať dokument" },
     { number: 2, label: "Vizuálny podpis" },
@@ -11,9 +11,7 @@ export default function StepIndicator({ currentStep }) {
         .stepper {
           display: flex;
           align-items: center;
-          justify-content: center;
-          gap: 0;
-          padding: 28px 0 20px;
+          padding: 20px 48px;
           background: #fff;
           border-bottom: 1px solid #e8eaf0;
         }
@@ -22,7 +20,7 @@ export default function StepIndicator({ currentStep }) {
           flex-direction: column;
           align-items: center;
           gap: 6px;
-          position: relative;
+          flex-shrink: 0;
         }
         .step-circle {
           width: 36px;
@@ -65,10 +63,10 @@ export default function StepIndicator({ currentStep }) {
           color: #16a34a;
         }
         .step-line {
-          width: 80px;
+          flex: 1;
           height: 2px;
           background: #e8eaf0;
-          margin: 0 4px;
+          margin: 0 16px;
           margin-bottom: 22px;
           transition: background 0.3s ease;
         }
@@ -77,21 +75,27 @@ export default function StepIndicator({ currentStep }) {
         }
       `}</style>
       <div className="stepper">
-        {steps.map((step, i) => (
-          <div key={step.number} style={{ display: "flex", alignItems: "center" }}>
-            <div className="step-item">
-              <div className={`step-circle ${currentStep === step.number ? "active" : currentStep > step.number ? "done" : ""}`}>
-                {currentStep > step.number ? "✓" : step.number}
+        {steps.map((step, i) => {
+          const isDone = currentStep > step.number || (step.number === 3 && isSigned);
+
+          const isActive = currentStep === step.number && !isDone;
+
+          return (
+            <div key={step.number} style={{ display: "flex", alignItems: "center", flex: i < steps.length - 1 ? 1 : 0 }}>
+              <div className="step-item">
+                <div className={`step-circle ${isActive ? "active" : isDone ? "done" : ""}`}>
+                  {isDone ? "✓" : step.number}
+                </div>
+                <span className={`step-label ${isActive ? "active" : isDone ? "done" : ""}`}>
+                  {step.label}
+                </span>
               </div>
-              <span className={`step-label ${currentStep === step.number ? "active" : currentStep > step.number ? "done" : ""}`}>
-                {step.label}
-              </span>
+              {i < steps.length - 1 && (
+                <div className={`step-line ${isDone ? "done" : ""}`} />
+              )}
             </div>
-            {i < steps.length - 1 && (
-              <div className={`step-line ${currentStep > step.number ? "done" : ""}`} />
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );

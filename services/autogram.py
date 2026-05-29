@@ -5,12 +5,6 @@ AUTOGRAM_URL = "http://localhost:37200/sign"
 
 # vrati tuple
 def sign_pdf_with_autogram(pdf_bytes: bytes, filename: str, level: str):
-    """
-    Returns:
-      ("signed", {"signedBy": ..., "issuedBy": ..., "content": <bytes>})  on success
-      ("cancelled", {})                                                 on user cancel
-      ("error", {"status_code": int, "message": str})                   on error
-    """
     payload = {
         "document": {
             "content": base64.b64encode(pdf_bytes).decode("utf-8"),
