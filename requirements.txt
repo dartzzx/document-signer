@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-multipart
+requests
+pydantic
+pyhanko
+pyhanko-certvalidator
+asn1crypto
+pypdf
+reportlab
