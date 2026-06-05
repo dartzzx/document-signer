@@ -260,19 +260,11 @@ export default function VerifyPage() {
             </ul>
           </div>
 
-          <div className="important-banner">
-            <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span><b>Dôležité</b><br />
-            Overenie podpisu vyžaduje pripojenie na internet pre kontrolu revokácie certifikátov.</span>
-          </div>
-
           <div className="side-card" style={{ marginTop: 16 }}>
             <h3>Podporované formáty</h3>
             <ul className="check-list">
               <li>PAdES-BASELINE-B</li>
               <li>PAdES-BASELINE-T</li>
-              <li>PAdES-BASELINE-LT</li>
-              <li>PAdES-BASELINE-LTA</li>
             </ul>
           </div>
         </div>

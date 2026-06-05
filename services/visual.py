@@ -18,7 +18,7 @@ _FONT_FILES = {
     "Caveat":        "Caveat-Regular.ttf",
 }
 
-# Registruj len fonty, ktorých súbor existuje
+# registrovanie fontov
 FONTS: dict[str, str] = {}
 for name, file in _FONT_FILES.items():
     path = os.path.join(FONTS_DIR, file)
@@ -31,7 +31,7 @@ for name, file in _FONT_FILES.items():
 if not FONTS:
     raise RuntimeError("Žiadny font sa nenašiel. Skopíruj aspoň DejaVuSans.ttf do /fonts.")
 
-DEFAULT_FONT = next(iter(FONTS))  # prvý dostupný
+DEFAULT_FONT = next(iter(FONTS))
 
 
 def add_visual_signature(

@@ -8,8 +8,6 @@ from typing import Optional
 from services.autogram import sign_pdf_with_autogram
 from services.visual import add_visual_signature
 
-from models.signature import VisualSignatureParams
-
 from pyhanko.sign.validation import validate_pdf_signature
 from pyhanko.pdf_utils.reader import PdfFileReader
 from pyhanko_certvalidator import ValidationContext
@@ -25,6 +23,8 @@ from asn1crypto import pem, x509
 import json
 
 app = FastAPI()
+
+pool = ThreadPoolExecutor(max_workers = 4)
 
 # prepojenie medzi f-endom a b-endom
 app.add_middleware(
@@ -47,50 +47,11 @@ def root():
     return {"message": "Backend beží"}
 
 
-@app.post("/prepare-visual")
-async def prepare_visual(
-        file: UploadFile = File(...),
-        image: Optional[UploadFile] = File(None),  # volitelny parameter pre obrazok/sken podpisu
-        params: VisualSignatureParams = Depends(VisualSignatureParams.as_form)
-):
-    pdf_bytes = await file.read()
-
-    if not pdf_bytes.startswith(b"%PDF"):
-        raise HTTPException(status_code=400, detail="Súbor nie je PDF")
-
-    MAX_FILE_SIZE = 10 * 1024 * 1024
-
-    if len(pdf_bytes) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="Súbor je príliš veľký (max 10 MB).")
-
-    ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg"}
-
-    if image and image.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=400, detail="Nepodporovaný formát obrázka. Povolené sú PNG a JPEG")
-
-    image_bytes = await image.read() if image else None
-    prepared = add_visual_signature(
-        pdf_bytes=pdf_bytes,
-        page_index=params.page,
-        x=params.x,
-        y=params.y,
-        w=params.w,
-        h=params.h,
-        text=params.text,
-        image_bytes=image_bytes,
-    )
-    return Response(
-        content=prepared,
-        media_type="application/pdf",
-        headers={"Content-Disposition": content_disposition(f"prepared_{file.filename}")}
-    )
-
-
 @app.post("/prepare-visual-multi")
 async def prepare_visual_multi(
         file: UploadFile = File(...),
         image: Optional[UploadFile] = File(None),
-        signatures: str = Form(...),  # JSON string
+        signatures: str = Form(...),
         text: Optional[str] = Form(None),
         font_name: Optional[str] = Form(None),
 ):
@@ -102,6 +63,11 @@ async def prepare_visual_multi(
     if len(pdf_bytes) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Súbor je príliš veľký (max 10 MB).")
 
+    ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg"}
+
+    if image and image.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Nepodporovaný formát obrázka. Povolené sú PNG a JPEG")
+
     try:
         sig_list = json.loads(signatures)
     except Exception:
@@ -109,7 +75,6 @@ async def prepare_visual_multi(
 
     image_bytes = await image.read() if image else None
 
-    # aplikuj všetky podpisy postupne
     current_pdf = pdf_bytes
     for sig in sig_list:
         current_pdf = add_visual_signature(
@@ -216,8 +181,8 @@ def run_verify(pdf_bytes: bytes):
 async def verify_signatures(file: UploadFile = File(...)):
     pdf_bytes = await file.read()
 
-    loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor() as pool:
-        results = await loop.run_in_executor(pool, run_verify, pdf_bytes)
+    loop = asyncio.get_running_loop()
+
+    results = await loop.run_in_executor(pool, run_verify, pdf_bytes)
 
     return {"signatures": results}

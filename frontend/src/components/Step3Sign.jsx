@@ -291,11 +291,11 @@ export default function Step3Sign({ currentPdfBlob, currentPdfName, setCurrentPd
                 value={padesLevel}
                 onChange={(e) => setPadesLevel(e.target.value)}
               >
-                <option value="PAdES_BASELINE_B">PAdES-B (Základný kvalifikovaný podpis)</option>
-                <option value="PAdES_BASELINE_T">PAdES-T (Podpis s nezávislou časovou pečiatkou)</option>
+                <option value="PAdES_BASELINE_B">PAdES-B-B (Základný kvalifikovaný podpis)</option>
+                <option value="PAdES_BASELINE_T">PAdES-B-T (Podpis s nezávislou časovou pečiatkou)</option>
               </select>
               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#6b7280" }}>
-                Pre dlhodobú overiteľnosť dokumentu odporúčame zvoliť profil PAdES-T.
+                Pre dlhodobú overiteľnosť dokumentu odporúčame zvoliť profil PAdES-B-T.
               </span>
             </div>
           )}

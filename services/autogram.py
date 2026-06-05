@@ -3,7 +3,6 @@ import requests
 
 AUTOGRAM_URL = "http://localhost:37200/sign"
 
-# vrati tuple
 def sign_pdf_with_autogram(pdf_bytes: bytes, filename: str, level: str):
     payload = {
         "document": {
